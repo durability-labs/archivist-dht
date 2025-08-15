@@ -1,8 +1,8 @@
 # Package
 
 version       = "0.4.0"
-author        = "Status Research & Development GmbH"
-description   = "Tests for Codex DHT"
+author        = "Archivist DHT Authors, Status Research & Development GmbH"
+description   = "Tests for Archivist DHT"
 license       = "MIT"
 installFiles  = @["build.nims"]
 

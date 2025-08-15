@@ -3,8 +3,8 @@ import
   chronos,
   libp2p/crypto/[crypto, secp],
   libp2p/multiaddress,
-  codexdht/discv5/[node, routing_table, spr],
-  codexdht/discv5/protocol as discv5_protocol
+  archivistdht/discv5/[node, routing_table, spr],
+  archivistdht/discv5/protocol as discv5_protocol
 
 proc localAddress*(port: int): Address =
   Address(ip: parseIpAddress("127.0.0.1"), port: Port(port))

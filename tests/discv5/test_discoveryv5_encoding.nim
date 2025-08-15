@@ -6,8 +6,8 @@ import
   bearssl/rand,
   chronos,
   libp2p/crypto/secp,
-  codexdht/discv5/[messages, messages_encoding, encoding, spr, node, sessions],
-  codexdht/discv5/crypto,
+  archivistdht/discv5/[messages, messages_encoding, encoding, spr, node, sessions],
+  archivistdht/discv5/crypto,
   stew/byteutils,
   stint,
   ../dht/test_helper

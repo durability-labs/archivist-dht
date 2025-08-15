@@ -1,5 +1,5 @@
 import
-  ./codexdht/dht,
-  ./codexdht/discv5
+  ./archivistdht/dht,
+  ./archivistdht/discv5
 
 export dht, discv5

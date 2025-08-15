@@ -6,10 +6,10 @@ import pkg/asynctest/chronos/unittest
 import pkg/datastore
 from pkg/libp2p import PeerId
 
-import codexdht/private/eth/p2p/discoveryv5/spr
-import codexdht/private/eth/p2p/discoveryv5/providers
-import codexdht/discv5/node
-import codexdht/private/eth/p2p/discoveryv5/lru
+import archivistdht/private/eth/p2p/discoveryv5/spr
+import archivistdht/private/eth/p2p/discoveryv5/providers
+import archivistdht/discv5/node
+import archivistdht/private/eth/p2p/discoveryv5/lru
 import ./test_helper
 
 suite "Test Providers Manager simple":

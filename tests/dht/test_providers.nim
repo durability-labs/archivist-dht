@@ -17,8 +17,8 @@ import
   chronos,
   libp2p/crypto/[crypto, secp],
   libp2p/[multiaddress, multicodec, multihash, routing_record, signed_envelope],
-  codexdht/discv5/crypto as dhtcrypto,
-  codexdht/discv5/protocol as discv5_protocol,
+  archivistdht/discv5/crypto as dhtcrypto,
+  archivistdht/discv5/protocol as discv5_protocol,
   test_helper
 
 proc bootstrapNodes(
