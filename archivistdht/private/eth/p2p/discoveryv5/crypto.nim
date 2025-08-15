@@ -30,7 +30,7 @@ proc fromHex*(T: type PrivateKey, data: string): Result[PrivateKey, cstring] =
   ok PrivateKey.init(skKey)
 
 proc fromHex*(T: type PublicKey, data: string): Result[PublicKey, cstring] =
-  let skKey = ? SkPublicKey.init(data).mapErr(e =>
+  let skKey = ? secp.SkPublicKey.init(data).mapErr(e =>
                 ("Failed to init public key from hex string: " & $e).cstring)
   ok PublicKey.init(skKey)
 

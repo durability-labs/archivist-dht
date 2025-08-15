@@ -75,7 +75,6 @@
 
 import
   std/[tables, sets, options, math, sequtils, algorithm, strutils],
-  stew/shims/net as stewNet,
   json_serialization/std/net,
   stew/[base64, endians2, results],
   pkg/[chronicles, chronicles/chronos_tools],

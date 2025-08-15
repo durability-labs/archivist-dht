@@ -9,7 +9,7 @@
 
 import
   std/[algorithm, times, sequtils, bitops, sets, options, tables],
-  stint, chronicles, metrics, bearssl/rand, chronos, stew/shims/net as stewNet,
+  stint, chronicles, metrics, bearssl/rand, chronos,
   "."/[node, random2, spr]
 
 export options
