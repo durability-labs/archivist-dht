@@ -7,12 +7,12 @@
 # Everything below the handling of ordinary messages
 import
   std/[tables, options, sets],
+  std/net,
   bearssl/rand,
   chronos,
   chronicles,
   metrics,
   libp2p/crypto/crypto,
-  stew/shims/net,
   "."/[node, encoding, sessions]
 
 const
