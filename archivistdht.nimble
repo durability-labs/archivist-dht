@@ -1,7 +1,7 @@
 # Package
 
 version       = "0.5.0"
-author        = "Status Research & Development GmbH"
+author        = "Archivist DHT Authors, Status Research & Development GmbH"
 description   = "DHT based on Eth discv5 implementation"
 license       = "MIT"
 skipDirs      = @["tests"]
@@ -18,7 +18,7 @@ requires "libp2p >= 1.5.0 & < 2.0.0"
 requires "metrics >= 0.1.0 & < 0.2.0"
 requires "stew >= 0.2.0 & < 0.3.0"
 requires "stint >= 0.8.1 & < 0.9.0"
-requires "https://github.com/codex-storage/nim-datastore >= 0.2.0 & < 0.3.0"
+requires "https://github.com/durability-labs/nim-datastore >= 0.2.0 & < 0.3.0"
 requires "questionable >= 0.10.15 & < 0.11.0"
 
 task testAll, "Run all test suites":

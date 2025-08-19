@@ -5,9 +5,9 @@ import
   chronos, chronicles, stint, asynctest/chronos/unittest, 
   stew/byteutils, bearssl/rand,
   libp2p/crypto/crypto,
-  codexdht/discv5/[transport, spr, node, routing_table, encoding, sessions, nodes_verification],
-  codexdht/discv5/crypto as dhtcrypto,
-  codexdht/discv5/protocol as discv5_protocol,
+  archivistdht/discv5/[transport, spr, node, routing_table, encoding, sessions, nodes_verification],
+  archivistdht/discv5/crypto as dhtcrypto,
+  archivistdht/discv5/protocol as discv5_protocol,
   ../dht/test_helper
 
 suite "Discovery v5 Tests":
