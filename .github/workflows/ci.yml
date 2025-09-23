@@ -16,6 +16,8 @@ jobs:
       uses: iffy/install-nim@v5
       with:
         version: ${{ matrix.nim }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
       run: nimble install -y
     - name: Test
