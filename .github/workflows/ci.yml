@@ -24,5 +24,7 @@ jobs:
         cmake-version: '3.x'
     - name: Build
       run: nimble install -y
+      env:
+        TMP: ${{ runner.temp }}
     - name: Test
       run: nimble test -y
