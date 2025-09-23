@@ -303,7 +303,7 @@
     },
     "quic": {
       "version": "0.2.16",
-      "vcsRevision": "593461cab32b4fbe227918b28465cc40b4e678c7",
+      "vcsRevision": "9370190ded18d78a5a9990f57aa8cbbf947f3891",
       "url": "https://github.com/vacp2p/nim-quic",
       "downloadMethod": "git",
       "dependencies": [
@@ -316,7 +316,7 @@
         "bearssl"
       ],
       "checksums": {
-        "sha1": "0ab5ca9c33aceb7951abcea5d96a16a23a714877"
+        "sha1": "fb2576e9d3a9c98914eb8485002e764cdababe5b"
       }
     },
     "libp2p": {
@@ -341,16 +341,6 @@
       ],
       "checksums": {
         "sha1": "47489bcbf20d50f84bfa83d8917284944c90b3a2"
-      }
-    },
-    "nim": {
-      "version": "2.2.4",
-      "vcsRevision": "",
-      "url": "https://github.com/nim-lang/Nim.git",
-      "downloadMethod": "git",
-      "dependencies": [],
-      "checksums": {
-        "sha1": "454d3559a45e1218ca980c7b25c1196ece248b14"
       }
     },
     "npeg": {
