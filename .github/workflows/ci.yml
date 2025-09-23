@@ -18,6 +18,10 @@ jobs:
         version: ${{ matrix.nim }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v2
+      with:
+        cmake-version: '3.x'
     - name: Build
       run: nimble install -y
     - name: Test
