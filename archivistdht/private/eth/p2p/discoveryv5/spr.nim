@@ -8,7 +8,8 @@ import
   chronicles,
   std/[options, strutils, sugar],
   std/net,
-  pkg/stew/[results, byteutils, arrayops],
+  pkg/stew/[byteutils, arrayops],
+  pkg/results,
   stew/endians2,
   stew/base64,
   libp2p/crypto/crypto,
@@ -59,7 +60,8 @@ proc update*(
   r: var SignedPeerRecord,
   pk: crypto.PrivateKey,
   ip: Option[IpAddress],
-  tcpPort, udpPort: Option[Port] = none[Port]()):
+  tcpPort: Option[Port] = none[Port](),
+  udpPort: Option[Port] = none[Port]()):
   RecordResult[void] =
   ## Update a `SignedPeerRecord` with given ip address, tcp port, udp port and optional
   ## custom k:v pairs.

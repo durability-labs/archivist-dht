@@ -8,7 +8,6 @@
 {.push raises: [].}
 
 import std/options
-import std/sequtils
 from std/times import now, utc, toTime, toUnix
 
 import pkg/stew/endians2

@@ -244,13 +244,13 @@ proc receive*(t: Transport, a: Address, packet: openArray[byte]) =
     trace "Packet decoding error", myport = t.bindAddress.port, error = decoded.error, address = a
 
 proc processClient[T](transp: DatagramTransport, raddr: TransportAddress):
-    Future[void] {.async.} =
+    Future[void] {.async:(raises: []).} =
   let t = getUserData[Transport[T]](transp)
 
   # TODO: should we use `peekMessage()` to avoid allocation?
   let buf = try:
     transp.getMessage()
-  except TransportOsError as e:
+  except TransportError as e:
     # This is likely to be local network connection issues.
     warn "Transport getMessage", exception = e.name, msg = e.msg
     return

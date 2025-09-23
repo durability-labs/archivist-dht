@@ -104,7 +104,8 @@ func newNode*(r: SignedPeerRecord): Result[Node, cstring] =
       address: none(Address)))
 
 proc update*(n: Node, pk: PrivateKey, ip: Option[IpAddress],
-    tcpPort, udpPort: Option[Port] = none[Port]()): Result[void, cstring] =
+    tcpPort: Option[Port] = none[Port](), 
+    udpPort: Option[Port] = none[Port]()): Result[void, cstring] =
   ? n.record.update(pk, ip, tcpPort, udpPort)
 
   if ip.isSome():
@@ -129,7 +130,7 @@ func `==`*(a, b: Node): bool =
     (not a.isNil and not b.isNil and a.pubkey == b.pubkey)
 
 func hash*(id: NodeId): Hash =
-  hash(id.toByteArrayBE)
+  hash(id.toBytesBE)
 
 proc random*(T: type NodeId, rng: var HmacDrbgContext): T =
   var id: NodeId

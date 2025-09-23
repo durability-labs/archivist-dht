@@ -7,7 +7,6 @@
 
 {.push raises: [].}
 
-import std/sequtils
 import std/strutils
 
 import pkg/chronos

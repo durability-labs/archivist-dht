@@ -18,13 +18,14 @@ import
   stew/endians2,
   bearssl/rand,
   chronicles,
-  stew/[results, byteutils],
+  stew/byteutils,
   stint,
   libp2p/crypto/crypto as libp2p_crypto,
   libp2p/crypto/secp,
   libp2p/signed_envelope,
   metrics,
   nimcrypto,
+  pkg/results,
   "."/[messages, messages_encoding, node, spr, hkdf, sessions],
   "."/crypto
 
@@ -129,7 +130,7 @@ proc idHash(challengeData, ephkey: openArray[byte], nodeId: NodeId):
   ctx.update(idSignatureText)
   ctx.update(challengeData)
   ctx.update(ephkey)
-  ctx.update(nodeId.toByteArrayBE())
+  ctx.update(nodeId.toBytesBE())
   result = ctx.finish()
   ctx.clear()
 
@@ -153,8 +154,8 @@ proc deriveKeys*(n1, n2: NodeId, priv: PrivateKey, pub: PublicKey,
 
   var info = newSeqOfCap[byte](keyAgreementPrefix.len + 32 * 2)
   for i, c in keyAgreementPrefix: info.add(byte(c))
-  info.add(n1.toByteArrayBE())
-  info.add(n2.toByteArrayBE())
+  info.add(n1.toBytesBE())
+  info.add(n2.toBytesBE())
 
   var secrets: HandshakeSecrets
   static: assert(sizeof(secrets) == aesKeySize * 2)
@@ -193,7 +194,7 @@ proc decryptGCM*(key: AesKey, nonce, ct, authData: openArray[byte]):
 
 proc encryptHeader*(id: NodeId, iv, header: openArray[byte]): seq[byte] =
   var ectx: CTR[cipher]
-  ectx.init(id.toByteArrayBE().toOpenArray(0, 15), iv)
+  ectx.init(id.toBytesBE().toOpenArray(0, 15), iv)
   result = newSeq[byte](header.len)
   ectx.encrypt(header, result)
   ectx.clear()
@@ -220,7 +221,7 @@ proc encodeMessagePacket*(rng: var HmacDrbgContext, c: var Codec,
   hmacDrbgGenerate(rng, iv) # Random IV
 
   # static-header
-  let authdata = c.localNode.id.toByteArrayBE()
+  let authdata = c.localNode.id.toBytesBE()
   let staticHeader = encodeStaticHeader(Flag.OrdinaryMessage, nonce,
     authdata.len())
   # header = static-header || authdata
@@ -312,7 +313,7 @@ proc encodeHandshakePacket*(rng: var HmacDrbgContext, c: var Codec,
   var authdata: seq[byte]
   var authdataHead: seq[byte]
 
-  authdataHead.add(c.localNode.id.toByteArrayBE())
+  authdataHead.add(c.localNode.id.toBytesBE())
 
   let ephKeys = ? KeyPair.random(PKScheme.Secp256k1, rng)
                     .mapErr((e: CryptoError) =>
@@ -378,7 +379,7 @@ proc decodeHeader*(id: NodeId, iv, maskedHeader: openArray[byte]):
   # No need to check staticHeader size as that is included in minimum packet
   # size check in decodePacket
   var ectx: CTR[cipher]
-  ectx.init(id.toByteArrayBE().toOpenArray(0, aesKeySize - 1), iv)
+  ectx.init(id.toBytesBE().toOpenArray(0, aesKeySize - 1), iv)
   # Decrypt static-header part of the header
   var staticHeader = newSeq[byte](staticHeaderSize)
   ectx.decrypt(maskedHeader.toOpenArray(0, staticHeaderSize - 1), staticHeader)

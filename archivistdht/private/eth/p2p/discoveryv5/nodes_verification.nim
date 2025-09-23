@@ -2,7 +2,8 @@
 
 import
   std/[sets, options],
-  stew/results, chronicles, chronos,
+  pkg/results,
+  chronicles, chronos,
   "."/[node, spr, routing_table]
 
 logScope:
