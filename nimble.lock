@@ -322,7 +322,7 @@
     "libp2p": {
       "version": "1.13.0",
       "vcsRevision": "59e7069c15e914618b7f7b2206c47d16c5d10a34",
-      "url": "https://github.com/status-im/nim-libp2p",
+      "url": "https://github.com/durability-labs/nim-libp2p",
       "downloadMethod": "git",
       "dependencies": [
         "nimcrypto",
