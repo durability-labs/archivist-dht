@@ -16,5 +16,6 @@ requires "stew >= 0.2.0 & < 0.5.0"
 requires "stint >= 0.8.1 & < 0.9.0"
 requires "https://github.com/durability-labs/nim-datastore >= 0.2.1 & < 0.3.0"
 requires "questionable >= 0.10.15 & < 0.11.0"
-requires "asynctest >= 0.5.2 & < 0.6.0"
-requires "unittest2 >= 0.2.4 & < 0.3.0"
+
+taskRequires "test", "asynctest >= 0.5.2 & < 0.6.0"
+taskRequires "test", "unittest2 >= 0.2.4 & < 0.3.0"
