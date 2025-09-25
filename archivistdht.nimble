@@ -10,7 +10,7 @@ requires "nimcrypto >= 0.6.2 & < 0.7.0"
 requires "bearssl >= 0.2.5 & < 0.3.0"
 requires "chronicles >= 0.10.2"
 requires "chronos >= 4.0.3 & < 4.1.0"
-requires "https://github.com/durability-labs/nim-libp2p >= 1.12.0 & < 2.0.0"
+requires "https://github.com/durability-labs/nim-libp2p#multihash-poseidon2" # TODO: ensures compatiblity with archivist-node, replace once this branch is no longer needed
 requires "metrics >= 0.1.0 & < 0.2.0"
 requires "stew >= 0.2.0 & < 0.5.0"
 requires "stint >= 0.8.1 & < 0.9.0"
