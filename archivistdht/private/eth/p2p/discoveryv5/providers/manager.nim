@@ -134,7 +134,7 @@ proc get*(
     defer:
       if not isNil(cidIter):
         trace "Cleaning up query iterator"
-        discard (await cidIter.dispose())
+        cidIter.dispose()
 
     var keys: seq[Key]
     for item in cidIter:
@@ -198,7 +198,7 @@ proc contains*(self: ProvidersManager, id: NodeId): Future[bool] {.async.} =
     defer:
       if not isNil(iter):
         trace "Cleaning up query iterator"
-        discard (await iter.dispose())
+        iter.dispose()
 
     for item in iter:
       if (key, _) =? (await item) and key.isSome:
@@ -223,7 +223,7 @@ proc remove*(self: ProvidersManager, id: NodeId): Future[?!void] {.async.} =
     defer:
       if not isNil(iter):
         trace "Cleaning up query iterator"
-        discard (await iter.dispose())
+        iter.dispose()
 
     var
       keys: seq[Key]
@@ -265,7 +265,7 @@ proc remove*(
       defer:
         if not isNil(iter):
           trace "Cleaning up query iterator"
-          discard (await iter.dispose())
+          iter.dispose()
 
       var
         keys: seq[Key]

@@ -40,7 +40,7 @@ proc cleanupExpired*(
     defer:
       if not isNil(iter):
         trace "Cleaning up query iterator"
-        discard (await iter.dispose())
+        iter.dispose()
 
     var
       keys = newSeq[Key]()
@@ -84,7 +84,7 @@ proc cleanupOrphaned*(
     defer:
       if not isNil(iter):
         trace "Cleaning up orphaned query iterator"
-        discard (await iter.dispose())
+        iter.dispose()
 
     var count = 0
     for item in iter:
@@ -115,7 +115,7 @@ proc cleanupOrphaned*(
 
         if not isNil(cidIter):
           trace "Disposing cid iter"
-          discard (await cidIter.dispose())
+          cidIter.dispose()
 
         if res > 0:
           trace "Peer not orphaned, skipping", peerId

@@ -14,7 +14,7 @@ requires "https://github.com/durability-labs/nim-libp2p#multihash-poseidon2" # T
 requires "metrics >= 0.1.0"
 requires "stew >= 0.2.0"
 requires "stint >= 0.8.1"
-requires "https://github.com/durability-labs/nim-datastore >= 0.2.1"
+requires "https://github.com/durability-labs/nim-datastore >= 0.4.0"
 requires "questionable >= 0.10.15"
 
 taskRequires "test", "asynctest >= 0.5.2"
