@@ -122,6 +122,7 @@ const
   MaxNodesPerMessage = 3 ## Maximum amount of SPRs per individual Nodes message
   RefreshInterval = 5.minutes ## Interval of launching a random query to
   ## refresh the routing table.
+  RoutingTableLowThreshold = 1000 # If we have fewer than 1000 routing table entries, we want more.
   RevalidateMin = 5000
   RevalidateMax = 10000 ## Revalidation of a peer is done between min and max milliseconds.
   ## value in milliseconds
@@ -409,6 +410,129 @@ proc handleGetProviders(
   let response = ProvidersMessage(total: 1, provs: provs.get)
   d.sendResponse(fromId, fromAddr, response, reqId)
 
+proc registerTalkProtocol*(d: Protocol, protocolId: seq[byte],
+    protocol: TalkProtocol): DiscResult[void] =
+  # Currently allow only for one handler per talk protocol.
+  if d.talkProtocols.hasKeyOrPut(protocolId, protocol):
+    err("Protocol identifier already registered")
+  else:
+    ok()
+
+proc replaceNode(d: Protocol, n: Node, forceRemoveBelow = 1.0) =
+  for bn in d.bootstrapRecords:
+    if n.record.data.peerId == bn.data.peerId:
+      # For now we never remove bootstrap nodes. It might make sense to actually
+      # do so and to retry them only in case we drop to a really low amount of
+      # peers in the routing table.
+      debug "Message request to bootstrap node failed", src=d.localNode, dst=n
+      return
+  d.routingTable.replaceNode(n, forceRemoveBelow)
+
+proc sendRequest*[T: SomeMessage](d: Protocol, toNode: Node, m: T,
+    reqId: RequestId) =
+  doAssert(toNode.address.isSome())
+  let
+    message = encodeMessage(m, reqId)
+
+  trace "Send message packet", dstId = toNode.id,
+    address = toNode.address, kind = messageKind(T)
+  dht_message_requests_outgoing.inc()
+
+  d.transport.sendMessage(toNode, message)
+
+proc waitResponse*[T: SomeMessage](d: Protocol, node: Node, msg: T):
+    Future[Option[Message]] =
+  let reqId = RequestId.init(d.rng[])
+  result = d.waitMessage(node.id, reqId)
+  sendRequest(d, node, msg, reqId)
+
+proc waitMessage(d: Protocol, fromNode: NodeId, reqId: RequestId, timeout = ResponseTimeout):
+    Future[Option[Message]] =
+  result = newFuture[Option[Message]]("waitMessage")
+  let res = result
+  let key = (fromNode, reqId)
+  sleepAsync(timeout).addCallback() do(data: pointer):
+    d.awaitedMessages.del(key)
+    if not res.finished:
+      res.complete(none(Message))
+  d.awaitedMessages[key] = result
+
+proc waitNodeResponses*[T: SomeMessage](d: Protocol, node: Node, msg: T):
+    Future[DiscResult[seq[SignedPeerRecord]]] =
+  let reqId = RequestId.init(d.rng[])
+  result = d.waitNodes(node, reqId)
+  sendRequest(d, node, msg, reqId)
+
+proc waitNodes(d: Protocol, fromNode: Node, reqId: RequestId):
+    Future[DiscResult[seq[SignedPeerRecord]]] {.async.} =
+  ## Wait for one or more nodes replies.
+  ##
+  ## The first reply will hold the total number of replies expected, and based
+  ## on that, more replies will be awaited.
+  ## If one reply is lost here (timed out), others are ignored too.
+  ## Same counts for out of order receival.
+  let startTime = Moment.now()
+  var op = await d.waitMessage(fromNode.id, reqId)
+  if op.isSome:
+    if op.get.kind == MessageKind.nodes:
+      var res = op.get.nodes.sprs
+      let
+        total = op.get.nodes.total
+        firstTime = Moment.now()
+        rtt = firstTime - startTime
+      # trace "nodes RTT:", rtt, node = fromNode
+      fromNode.registerRtt(rtt)
+      for i in 1 ..< total:
+        op = await d.waitMessage(fromNode.id, reqId)
+        if op.isSome and op.get.kind == MessageKind.nodes:
+          res.add(op.get.nodes.sprs)
+          # Estimate bandwidth based on UDP packet train received, assuming these were
+          # released fast and spaced in time by bandwidth bottleneck. This is just a rough
+          # packet-pair based estimate, far from being perfect.
+          # TODO: get message size from lower layer for better bandwidth estimate
+          # TODO: get better reception timestamp from lower layers
+          let
+            deltaT = Moment.now() - firstTime
+            bwBps = 500.0 * 8.0 / (deltaT.nanoseconds.float / i.float / 1e9)
+          # trace "bw estimate:", deltaT = deltaT, i, bw_mbps = bwBps / 1e6, node = fromNode
+          fromNode.registerBw(bwBps)
+        else:
+          # No error on this as we received some nodes.
+          break
+      return ok(res)
+    else:
+      dht_message_requests_outgoing.inc(labelValues = ["invalid_response"])
+      return err("Invalid response to find node message")
+  else:
+    dht_message_requests_outgoing.inc(labelValues = ["no_response"])
+    return err("Nodes message not received in time")
+
+proc pickUpUnknownNode(d: Protocol, fromId: NodeId, fromAddr: Address) {.async.} =
+  # Existing methods expect us to have a Node object we want to talk to.
+  # We don't. So we format, send, and receive our own messages.
+  let
+    msg = FindNodeMessage(distances: @[0.uint16])
+    reqId = RequestId.init(d.rng[])
+    message = encodeMessage(msg, reqId)
+  
+  warn "Sending query for unknown node's SPR"
+  d.transport.sendMessage(fromId, fromAddr, message)
+
+  let response = await d.waitMessage(fromId, reqId)
+
+  if not response.isSome():
+    warn "Got no response when querying unknown node"
+    return
+  
+  let resp = response.get()
+  if resp.kind == MessageKind.nodes:
+    let sprs = resp.nodes.sprs
+    warn "Querying unknown node yielded sprs", num = sprs.len
+    for spr in sprs:
+      discard d.addNode(spr)
+  else:
+    warn "Response when querying unknown node was not of type 'nodes'"
+
 proc handleMessage(d: Protocol, srcId: NodeId, fromAddr: Address,
     message: Message) =
   case message.kind
@@ -445,102 +569,15 @@ proc handleMessage(d: Protocol, srcId: NodeId, fromAddr: Address,
       trace "Timed out or unrequested message", kind = message.kind,
         origin = fromAddr
 
-proc registerTalkProtocol*(d: Protocol, protocolId: seq[byte],
-    protocol: TalkProtocol): DiscResult[void] =
-  # Currently allow only for one handler per talk protocol.
-  if d.talkProtocols.hasKeyOrPut(protocolId, protocol):
-    err("Protocol identifier already registered")
-  else:
-    ok()
-
-proc replaceNode(d: Protocol, n: Node, forceRemoveBelow = 1.0) =
-  for bn in d.bootstrapRecords:
-    if n.record.data.peerId == bn.data.peerId:
-      # For now we never remove bootstrap nodes. It might make sense to actually
-      # do so and to retry them only in case we drop to a really low amount of
-      # peers in the routing table.
-      debug "Message request to bootstrap node failed", src=d.localNode, dst=n
-      return
-  d.routingTable.replaceNode(n, forceRemoveBelow)
-
-proc sendRequest*[T: SomeMessage](d: Protocol, toNode: Node, m: T,
-    reqId: RequestId) =
-  doAssert(toNode.address.isSome())
-  let
-    message = encodeMessage(m, reqId)
-
-  trace "Send message packet", dstId = toNode.id,
-    address = toNode.address, kind = messageKind(T)
-  dht_message_requests_outgoing.inc()
-
-  d.transport.sendMessage(toNode, message)
-
-proc waitResponse*[T: SomeMessage](d: Protocol, node: Node, msg: T):
-    Future[Option[Message]] =
-  let reqId = RequestId.init(d.rng[])
-  result = d.waitMessage(node, reqId)
-  sendRequest(d, node, msg, reqId)
-
-proc waitMessage(d: Protocol, fromNode: Node, reqId: RequestId, timeout = ResponseTimeout):
-    Future[Option[Message]] =
-  result = newFuture[Option[Message]]("waitMessage")
-  let res = result
-  let key = (fromNode.id, reqId)
-  sleepAsync(timeout).addCallback() do(data: pointer):
-    d.awaitedMessages.del(key)
-    if not res.finished:
-      res.complete(none(Message))
-  d.awaitedMessages[key] = result
-
-proc waitNodeResponses*[T: SomeMessage](d: Protocol, node: Node, msg: T):
-    Future[DiscResult[seq[SignedPeerRecord]]] =
-  let reqId = RequestId.init(d.rng[])
-  result = d.waitNodes(node, reqId)
-  sendRequest(d, node, msg, reqId)
-
-proc waitNodes(d: Protocol, fromNode: Node, reqId: RequestId):
-    Future[DiscResult[seq[SignedPeerRecord]]] {.async.} =
-  ## Wait for one or more nodes replies.
-  ##
-  ## The first reply will hold the total number of replies expected, and based
-  ## on that, more replies will be awaited.
-  ## If one reply is lost here (timed out), others are ignored too.
-  ## Same counts for out of order receival.
-  let startTime = Moment.now()
-  var op = await d.waitMessage(fromNode, reqId)
-  if op.isSome:
-    if op.get.kind == MessageKind.nodes:
-      var res = op.get.nodes.sprs
-      let
-        total = op.get.nodes.total
-        firstTime = Moment.now()
-        rtt = firstTime - startTime
-      # trace "nodes RTT:", rtt, node = fromNode
-      fromNode.registerRtt(rtt)
-      for i in 1 ..< total:
-        op = await d.waitMessage(fromNode, reqId)
-        if op.isSome and op.get.kind == MessageKind.nodes:
-          res.add(op.get.nodes.sprs)
-          # Estimate bandwidth based on UDP packet train received, assuming these were
-          # released fast and spaced in time by bandwidth bottleneck. This is just a rough
-          # packet-pair based estimate, far from being perfect.
-          # TODO: get message size from lower layer for better bandwidth estimate
-          # TODO: get better reception timestamp from lower layers
-          let
-            deltaT = Moment.now() - firstTime
-            bwBps = 500.0 * 8.0 / (deltaT.nanoseconds.float / i.float / 1e9)
-          # trace "bw estimate:", deltaT = deltaT, i, bw_mbps = bwBps / 1e6, node = fromNode
-          fromNode.registerBw(bwBps)
-        else:
-          # No error on this as we received some nodes.
-          break
-      return ok(res)
-    else:
-      dht_message_requests_outgoing.inc(labelValues = ["invalid_response"])
-      return err("Invalid response to find node message")
-  else:
-    dht_message_requests_outgoing.inc(labelValues = ["no_response"])
-    return err("Nodes message not received in time")
+  if message.kind == ping:
+    # If the routing table wants more records,
+    if d.routingTable.len < RoutingTableLowThreshold:
+      warn "Routing table below RoutingTableLowThreshold"
+      # and if this srcId is not known to the routing table,
+      if d.routingTable.getNode(srcId).isNone():
+        warn "Message received from unknown node"
+        # then we ask the unknown node for its SPR
+        asyncSpawn d.pickUpUnknownNode(srcId, fromAddr)
 
 proc ping*(d: Protocol, toNode: Node):
     Future[DiscResult[PongMessage]] {.async.} =
