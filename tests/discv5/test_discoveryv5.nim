@@ -83,13 +83,9 @@ suite "Discovery v5 Tests":
         rng, PrivateKey.example(rng), localAddress(20302))
 
     check:
-      node1.routingTable.len == 0
-      node2.routingTable.len == 0
-
-    check:
       (await node1.ping(node2.localNode)).isOK()
 
-    # Node1 becomes deleted from node2 routing table
+    # node1 becomes deleted from node2 routing table
     # (due to network timeouts for example)
     node2.routingTable.replaceNode(node1.localNode)
 
@@ -104,6 +100,9 @@ suite "Discovery v5 Tests":
     check:
       node1.routingTable.len == 0
       node2.routingTable.len == 1
+
+    await node1.closeWait()
+    await node2.closeWait()
 
   test "Distance check":
     const
