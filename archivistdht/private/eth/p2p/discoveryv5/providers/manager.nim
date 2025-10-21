@@ -5,7 +5,6 @@
 #   * Apache v2 license (license terms in the root directory or at https://www.apache.org/licenses/LICENSE-2.0).
 # at your option. This file may not be copied, modified, or distributed except according to those terms.
 
-import std/sequtils
 import std/strutils
 from std/times import now, utc, toTime, toUnix
 
@@ -14,8 +13,7 @@ import pkg/datastore
 import pkg/chronos
 import pkg/libp2p
 import pkg/chronicles
-import pkg/stew/results as rs
-import pkg/stew/byteutils
+import pkg/results as rs
 import pkg/questionable
 import pkg/questionable/results
 
@@ -136,7 +134,7 @@ proc get*(
     defer:
       if not isNil(cidIter):
         trace "Cleaning up query iterator"
-        discard (await cidIter.dispose())
+        cidIter.dispose()
 
     var keys: seq[Key]
     for item in cidIter:
@@ -200,7 +198,7 @@ proc contains*(self: ProvidersManager, id: NodeId): Future[bool] {.async.} =
     defer:
       if not isNil(iter):
         trace "Cleaning up query iterator"
-        discard (await iter.dispose())
+        iter.dispose()
 
     for item in iter:
       if (key, _) =? (await item) and key.isSome:
@@ -225,7 +223,7 @@ proc remove*(self: ProvidersManager, id: NodeId): Future[?!void] {.async.} =
     defer:
       if not isNil(iter):
         trace "Cleaning up query iterator"
-        discard (await iter.dispose())
+        iter.dispose()
 
     var
       keys: seq[Key]
@@ -267,7 +265,7 @@ proc remove*(
       defer:
         if not isNil(iter):
           trace "Cleaning up query iterator"
-          discard (await iter.dispose())
+          iter.dispose()
 
       var
         keys: seq[Key]
