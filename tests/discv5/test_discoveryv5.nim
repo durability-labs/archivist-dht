@@ -50,7 +50,14 @@ suite "Discovery v5 Tests":
       pong1 = await discv5_protocol.ping(node1, bootnode.localNode)
       pong2 = await discv5_protocol.ping(node1, node2.localNode)
 
-    check pong1.isOk() and pong2.isOk()
+    check:
+      pong1.isOk()
+      pong2.isOk()
+      node1.addNode(node2.localNode)
+
+    # Seen value is below removal threshold
+    bootnode.localNode.seen = 0.2
+    node2.localNode.seen = 0.2
 
     await bootnode.closeWait()
     await node2.closeWait()
@@ -63,6 +70,8 @@ suite "Discovery v5 Tests":
       n.isSome()
       n.get() == bootnode.localNode
       node1.getNode(node2.localNode.id).isNone()
+      node1.routingTable.contains(bootnode.localNode)
+      not node1.routingTable.contains(node2.localNode)
 
     await node1.closeWait()
 
