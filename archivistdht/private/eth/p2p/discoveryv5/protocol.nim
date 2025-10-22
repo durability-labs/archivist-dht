@@ -122,7 +122,8 @@ const
   MaxNodesPerMessage = 3 ## Maximum amount of SPRs per individual Nodes message
   RefreshInterval = 5.minutes ## Interval of launching a random query to
   ## refresh the routing table.
-  RoutingTableLowThreshold = 1000 # If we have fewer than 1000 routing table entries, we want more.
+  RoutingTableLowThreshold = 256 # If we have fewer routing table entries, we want more.
+  # (max number of k-buckets)
   RevalidateMin = 5000
   RevalidateMax = 10000 ## Revalidation of a peer is done between min and max milliseconds.
   ## value in milliseconds
