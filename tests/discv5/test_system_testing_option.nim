@@ -56,4 +56,4 @@ suite "Archivist system testing options Tests":
   else:
     test "Not compiled with option":
       debugEcho "These tests should be compiled with '-d:archivist_system_testing_options'"
-      check 0 == 1
+      fail()
