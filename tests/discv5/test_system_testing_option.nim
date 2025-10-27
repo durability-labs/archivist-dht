@@ -1,13 +1,11 @@
 {.used.}
 
 import
-  std/tables,
-  chronos, chronicles, stint, asynctest/chronos/unittest, 
-  stew/byteutils, bearssl/rand,
-  libp2p/crypto/crypto,
-  archivistdht/discv5/[transport, spr, node, routing_table, encoding, sessions, nodes_verification],
-  archivistdht/discv5/crypto as dhtcrypto,
+  chronos,
+  bearssl/rand,
+  asynctest/chronos/unittest,
   archivistdht/discv5/protocol as discv5_protocol,
+  archivistdht/discv5/routing_table,
   ../dht/test_helper
 
 suite "Archivist system testing options Tests":
