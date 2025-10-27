@@ -75,6 +75,35 @@ suite "Discovery v5 Tests":
 
     await node1.closeWait()
 
+  test "Routing table should recover removed nodes after successful ping":
+    let
+      node1 = initDiscoveryNode(
+        rng, PrivateKey.example(rng), localAddress(20301))
+      node2 = initDiscoveryNode(
+        rng, PrivateKey.example(rng), localAddress(20302))
+
+    check:
+      (await node1.ping(node2.localNode)).isOK()
+
+    # node1 becomes deleted from node2 routing table
+    # (due to network timeouts for example)
+    node2.routingTable.replaceNode(node1.localNode)
+
+    check:
+      node1.routingTable.len == 0
+      node2.routingTable.len == 0
+
+    # connectivity is restored and node1 pings node2 again
+    check:
+      (await node1.ping(node2.localNode)).isOK()
+
+    check:
+      node1.routingTable.len == 0
+      node2.routingTable.len == 1
+
+    await node1.closeWait()
+    await node2.closeWait()
+
   test "Distance check":
     const
       targetId = "0x0000"

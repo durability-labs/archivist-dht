@@ -429,13 +429,6 @@ proc addNode*(r: var RoutingTable, n: Node): NodeStatus =
   # When bucket doesn't get split the node is added to the replacement cache
   return r.addReplacement(bucket, n)
 
-proc removeNode*(r: var RoutingTable, n: Node) =
-  ## Remove the node `n` from the routing table.
-  ## No replemennt added, even if there is in replacement cache.
-  let b = r.bucketForNode(n.id)
-  if b.remove(n):
-    ipLimitDec(r, b, n)
-
 proc replaceNode*(r: var RoutingTable, n: Node, forceRemoveBelow = 1.0) =
   ## Replace node `n` with last entry in the replacement cache. If there are
   ## no entries in the replacement cache, node `n` will either be removed
