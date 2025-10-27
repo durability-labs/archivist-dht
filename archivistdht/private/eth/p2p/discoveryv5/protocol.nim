@@ -508,7 +508,7 @@ proc waitNodes(d: Protocol, fromNode: Node, reqId: RequestId):
     dht_message_requests_outgoing.inc(labelValues = ["no_response"])
     return err("Nodes message not received in time")
 
-proc pickUpUnknownNode(d: Protocol, fromId: NodeId, fromAddr: Address) {.async.} =
+proc pickUpUnknownNode(d: Protocol, fromId: NodeId, fromAddr: Address) {.async: (raises: []).} =
   # Existing methods expect us to have a Node object we want to talk to.
   # We don't. So we format, send, and receive our own messages.
   let
@@ -516,23 +516,26 @@ proc pickUpUnknownNode(d: Protocol, fromId: NodeId, fromAddr: Address) {.async.}
     reqId = RequestId.init(d.rng[])
     message = encodeMessage(msg, reqId)
   
-  warn "Sending query for unknown node's SPR"
+  debug "Sending query for unknown node's SPR"
   d.transport.sendMessage(fromId, fromAddr, message)
 
-  let response = await d.waitMessage(fromId, reqId)
+  try:
+    let response = await d.waitMessage(fromId, reqId)
 
-  if not response.isSome():
-    warn "Got no response when querying unknown node"
-    return
-  
-  let resp = response.get()
-  if resp.kind == MessageKind.nodes:
-    let sprs = resp.nodes.sprs
-    warn "Querying unknown node yielded sprs", num = sprs.len
-    for spr in sprs:
-      discard d.addNode(spr)
-  else:
-    warn "Response when querying unknown node was not of type 'nodes'"
+    if not response.isSome():
+      debug "Got no response when querying unknown node"
+      return
+    
+    let resp = response.get()
+    if resp.kind == MessageKind.nodes:
+      let sprs = resp.nodes.sprs
+      debug "Querying unknown node yielded sprs", num = sprs.len
+      for spr in sprs:
+        discard d.addNode(spr)
+    else:
+      warn "Response when querying unknown node was not of type 'nodes'"
+  except CatchableError as exc:
+    error "Error when attempting to contact unknown node", err = exc.msg
 
 proc handleMessage(d: Protocol, srcId: NodeId, fromAddr: Address,
     message: Message) =

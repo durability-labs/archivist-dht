@@ -75,7 +75,7 @@ suite "Discovery v5 Tests":
 
     await node1.closeWait()
 
-  test "Node recovery":
+  test "Routing table should recover removed nodes after successful ping":
     let
       node1 = initDiscoveryNode(
         rng, PrivateKey.example(rng), localAddress(20301))
