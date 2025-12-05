@@ -9,12 +9,12 @@ requires "protobuf_serialization >= 0.3.0"
 requires "nimcrypto >= 0.6.2"
 requires "bearssl >= 0.2.5 & < 0.3.0"
 requires "chronicles >= 0.10.2"
-requires "chronos >= 4.0.3"
+requires "https://github.com/status-im/nim-chronos >= 4.0.4"
 requires "https://github.com/durability-labs/nim-libp2p#multihash-poseidon2" # TODO: ensures compatiblity with archivist-node, replace once this branch is no longer needed
 requires "metrics >= 0.1.0"
 requires "stew >= 0.2.0"
 requires "stint >= 0.8.1"
-requires "https://github.com/durability-labs/nim-datastore >= 0.4.0"
+requires "https://github.com/durability-labs/nim-datastore#rework-with-cas" # TODO: use the CAS version of the datastore
 requires "questionable >= 0.10.15"
 
 taskRequires "test", "asynctest >= 0.5.2"
