@@ -19,7 +19,7 @@ import ./common
 
 const
   MaxProvidersEntries* = 1000'u # one thousand records
-  MaxProvidersPerEntry* = 200'u  # providers per entry
+  MaxProvidersPerEntry* = 200'u # providers per entry
 
 logScope:
   topics = "discv5 providers cache"
@@ -33,10 +33,7 @@ type
     cache*: ItemsCache
     maxProviders*: int
 
-func add*(
-  self: var ProvidersCache,
-  id: NodeId,
-  record: SignedPeerRecord) =
+func add*(self: var ProvidersCache, id: NodeId, record: SignedPeerRecord) =
   ## Add providers for an id
   ## to the cache
 
@@ -46,18 +43,15 @@ func add*(
   without var providers =? self.cache.get(id):
     providers = Providers.init(self.maxProviders.int)
 
-  let
-    peerId = record.data.peerId
+  let peerId = record.data.peerId
 
   trace "Adding provider record to cache", id, peerId
   providers.put(peerId, record)
   self.cache.put(id, providers)
 
 proc get*(
-  self: var ProvidersCache,
-  id: NodeId,
-  start = 0,
-  stop = MaxProvidersPerEntry.int): seq[SignedPeerRecord] =
+    self: var ProvidersCache, id: NodeId, start = 0, stop = MaxProvidersPerEntry.int
+): seq[SignedPeerRecord] =
   ## Get providers for an id
   ## from the cache
 
@@ -65,15 +59,12 @@ proc get*(
     return
 
   if recs =? self.cache.get(id):
-    let
-      providers = toSeq(recs)[start..<min(recs.len, stop)]
+    let providers = toSeq(recs)[start ..< min(recs.len, stop)]
 
     trace "Providers already cached", id, len = providers.len
     return providers
 
-func remove*(
-  self: var ProvidersCache,
-  peerId: PeerId) =
+func remove*(self: var ProvidersCache, peerId: PeerId) =
   ## Remove a provider record from an id
   ## from the cache
   ##
@@ -87,10 +78,7 @@ func remove*(
       providers.del(peerId)
       self.cache.put(id, providers)
 
-func remove*(
-  self: var ProvidersCache,
-  id: NodeId,
-  peerId: PeerId) =
+func remove*(self: var ProvidersCache, id: NodeId, peerId: PeerId) =
   ## Remove a provider record from an id
   ## from the cache
   ##
@@ -113,12 +101,9 @@ func drop*(self: var ProvidersCache, id: NodeId) =
   self.cache.del(id)
 
 func init*(
-  T: type ProvidersCache,
-  size = MaxProvidersEntries,
-  maxProviders = MaxProvidersEntries,
-  disable = false): T =
-
-  T(
-    cache: ItemsCache.init(size.int),
-    maxProviders: maxProviders.int,
-    disable: disable)
+    T: type ProvidersCache,
+    size = MaxProvidersEntries,
+    maxProviders = MaxProvidersEntries,
+    disable = false,
+): T =
+  T(cache: ItemsCache.init(size.int), maxProviders: maxProviders.int, disable: disable)

@@ -1,9 +1,9 @@
-
 import std/sequtils
+import std/times
 
 import pkg/chronos
 import pkg/asynctest/chronos/unittest
-import pkg/datastore
+import pkg/kvstore
 from pkg/libp2p import PeerId
 
 import archivistdht/private/eth/p2p/discoveryv5/spr
@@ -14,7 +14,7 @@ import ./test_helper
 
 suite "Test Providers Manager simple":
   let
-    ds = SQLiteDatastore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(Memory).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
     rng = newRng()
     privKey = PrivateKey.example(rng)
@@ -28,8 +28,7 @@ suite "Test Providers Manager simple":
     (await manager.add(nodeId, provider)).tryGet
 
   test "Should get provider":
-    let
-      prov = (await manager.get(nodeId)).tryGet
+    let prov = (await manager.get(nodeId)).tryGet
 
     check prov[0] == provider
 
@@ -40,8 +39,7 @@ suite "Test Providers Manager simple":
       (await manager.contains(nodeId, provider.data.peerId))
 
   test "Should update provider with newer seqno":
-    var
-      updated = provider
+    var updated = provider
 
     updated.incSeqNo(privKey).tryGet
     (await manager.add(nodeId, updated)).tryGet
@@ -61,16 +59,16 @@ suite "Test Providers Manager simple":
 suite "Test Providers Manager multiple":
   let
     rng = newRng()
-    privKeys = (0..<10).mapIt( PrivateKey.example(rng) )
-    providers = privKeys.mapIt( it.toSignedPeerRecord() )
-    nodeIds = (0..<100).mapIt( NodeId.example(rng) )
+    privKeys = (0 ..< 10).mapIt(PrivateKey.example(rng))
+    providers = privKeys.mapIt(it.toSignedPeerRecord())
+    nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
-    ds: SQLiteDatastore
+    ds: SQLiteKVStore
     manager: ProvidersManager
 
   setup:
-    ds = SQLiteDatastore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(Memory).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
 
     for id in nodeIds:
@@ -84,11 +82,13 @@ suite "Test Providers Manager multiple":
 
   test "Should retrieve multiple records":
     for id in nodeIds:
-      check: (await manager.get(id)).tryGet.len == 10
+      check:
+        (await manager.get(id)).tryGet.len == 10
 
   test "Should retrieve multiple records with limit":
     for id in nodeIds:
-      check: (await manager.get(id, 5)).tryGet.len == 5
+      check:
+        (await manager.get(id, 5)).tryGet.len == 5
 
   test "Should remove by NodeId":
     (await (manager.remove(nodeIds[0]))).tryGet
@@ -135,16 +135,16 @@ suite "Test Providers Manager multiple":
 suite "Test providers with cache":
   let
     rng = newRng()
-    privKeys = (0..<10).mapIt( PrivateKey.example(rng) )
-    providers = privKeys.mapIt( it.toSignedPeerRecord() )
-    nodeIds = (0..<100).mapIt( NodeId.example(rng) )
+    privKeys = (0 ..< 10).mapIt(PrivateKey.example(rng))
+    providers = privKeys.mapIt(it.toSignedPeerRecord())
+    nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
-    ds: SQLiteDatastore
+    ds: SQLiteKVStore
     manager: ProvidersManager
 
   setup:
-    ds = SQLiteDatastore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(Memory).tryGet()
     manager = ProvidersManager.new(ds)
 
     for id in nodeIds:
@@ -158,11 +158,13 @@ suite "Test providers with cache":
 
   test "Should retrieve multiple records":
     for id in nodeIds:
-      check: (await manager.get(id)).tryGet.len == 10
+      check:
+        (await manager.get(id)).tryGet.len == 10
 
   test "Should retrieve multiple records with limit":
     for id in nodeIds:
-      check: (await manager.get(id, 5)).tryGet.len == 5
+      check:
+        (await manager.get(id, 5)).tryGet.len == 5
 
   test "Should remove by NodeId":
     (await (manager.remove(nodeIds[0]))).tryGet
@@ -203,21 +205,25 @@ suite "Test providers with cache":
 suite "Test Provider Maintenance":
   let
     rng = newRng()
-    privKeys = (0..<10).mapIt( PrivateKey.example(rng) )
-    providers = privKeys.mapIt( it.toSignedPeerRecord() )
-    nodeIds = (0..<100).mapIt( NodeId.example(rng) )
+    privKeys = (0 ..< 10).mapIt(PrivateKey.example(rng))
+    providers = privKeys.mapIt(it.toSignedPeerRecord())
+    nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
-    ds: SQLiteDatastore
+    ds: SQLiteKVStore
     manager: ProvidersManager
 
   setupAll:
-    ds = SQLiteDatastore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(Memory).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
 
     for id in nodeIds:
       for p in providers:
-        (await manager.add(id, p, ttl = 1.millis)).tryGet
+        (
+          await manager.add(
+            id, p, ttl = initDuration(milliseconds = 1).inMilliseconds()
+          )
+        ).tryGet
 
   teardownAll:
     (await ds.close()).tryGet()
@@ -226,25 +232,29 @@ suite "Test Provider Maintenance":
 
   test "Should cleanup expired":
     for id in nodeIds:
-      check: (await manager.get(id)).tryGet.len == 10
+      check:
+        (await manager.get(id)).tryGet.len == 10
 
     await sleepAsync(500.millis)
     await manager.store.cleanupExpired()
 
     for id in nodeIds:
-      check: (await manager.get(id)).tryGet.len == 0
+      check:
+        (await manager.get(id)).tryGet.len == 0
 
   test "Should not cleanup unexpired":
-    let
-      unexpired = PrivateKey.example(rng).toSignedPeerRecord()
+    let unexpired = PrivateKey.example(rng).toSignedPeerRecord()
 
-    (await manager.add(nodeIds[0], unexpired, ttl = 1.minutes)).tryGet
+    (
+      await manager.add(
+        nodeIds[0], unexpired, ttl = initDuration(minutes = 1).inMilliseconds()
+      )
+    ).tryGet
 
     await sleepAsync(500.millis)
     await manager.store.cleanupExpired()
 
-    let
-      unexpiredProvs = (await manager.get(nodeIds[0])).tryGet
+    let unexpiredProvs = (await manager.get(nodeIds[0])).tryGet
 
     check:
       unexpiredProvs.len == 1
@@ -254,9 +264,11 @@ suite "Test Provider Maintenance":
 
   test "Should cleanup orphaned":
     for id in nodeIds:
-      check: (await manager.get(id)).tryGet.len == 0
+      check:
+        (await manager.get(id)).tryGet.len == 0
 
     await manager.store.cleanupOrphaned()
 
     for p in providers:
-      check: not (await manager.contains(p.data.peerId))
+      check:
+        not (await manager.contains(p.data.peerId))

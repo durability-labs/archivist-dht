@@ -5,11 +5,12 @@
 #   * Apache v2 license (license terms in the root directory or at https://www.apache.org/licenses/LICENSE-2.0).
 # at your option. This file may not be copied, modified, or distributed except according to those terms.
 
+import std/sequtils
 import std/strutils
-from std/times import now, utc, toTime, toUnix
+import std/times
 
 import pkg/stew/endians2
-import pkg/datastore
+import pkg/kvstore
 import pkg/chronos
 import pkg/libp2p
 import pkg/chronicles
@@ -24,154 +25,144 @@ import ./cache
 import ./common
 import ../spr
 
-export cache, datastore
+export cache, kvstore
 
 logScope:
   topics = "discv5 providers manager"
 
-const
-  DefaultProviderTTL* = 24.hours
+const DefaultProviderTTL* = initDuration(hours = 24).inMilliseconds()
 
-type
-  ProvidersManager* = ref object of RootObj
-    store*: Datastore
-    cache*: ProvidersCache
-    ttl*: Duration
-    maxItems*: uint
-    maxProviders*: uint
-    disableCache*: bool
-    expiredLoop*: Future[void]
-    orphanedLoop*: Future[void]
-    started*: bool
-    batchSize*: int
-    cleanupInterval*: Duration
-
-proc getProvByKey*(self: ProvidersManager, key: Key): Future[?!SignedPeerRecord] {.async.} =
-
-  without bytes =? (await self.store.get(key)) and bytes.len <= 0:
-    trace "No provider in store"
-    return failure("No no provider in store")
-
-  return SignedPeerRecord.decode(bytes).mapErr(mapFailure)
+type ProvidersManager* = ref object of RootObj
+  store*: KVStore
+  cache*: ProvidersCache
+  maxItems*: uint
+  maxProviders*: uint
+  disableCache*: bool
+  expiredLoop*: Future[void]
+  orphanedLoop*: Future[void]
+  started*: bool
+  batchSize*: int
+  cleanupInterval*: timer.Duration
 
 proc add*(
-  self: ProvidersManager,
-  id: NodeId,
-  provider: SignedPeerRecord,
-  ttl = ZeroDuration): Future[?!void] {.async.} =
-
-  let
-    peerId = provider.data.peerId
+    self: ProvidersManager,
+    id: NodeId,
+    provider: SignedPeerRecord,
+    ttl = DefaultProviderTTL,
+): Future[?!void] {.async.} =
+  let peerId = provider.data.peerId
 
   trace "Adding provider to persistent store", id, peerId
-  without provKey =? makeProviderKey(peerId), err:
-    trace "Error creating key from provider record", err = err.msg
-    return failure err.msg
-
-  without cidKey =? makeCidKey(id, peerId), err:
-    trace "Error creating key from content id", err = err.msg
-    return failure err.msg
-
   let
-    now = times.now().utc().toTime().toUnix()
-    expires =
-      if ttl > ZeroDuration:
-        ttl.seconds + now
+    provKey = ?makeProviderKey(peerId)
+    cidKey = ?makeCidKey(id, peerId)
+    expires = nowMs() + ttl
+
+  # Middleware to handle conflicts - fetch current tokens and update values atomically
+  proc updateMiddleware(
+      failed: seq[RawRecord]
+  ): Future[?!seq[RawRecord]] {.async: (raises: [CancelledError]).} =
+    trace "Handling conflict for provider records", id, peerId
+    let keys = failed.mapIt(it.key)
+    # Use typed get with seq[byte] to get raw records
+    let existing = ?(await get[seq[byte]](self.store, keys))
+    var updated: seq[RawRecord]
+
+    for record in existing:
+      if record.key == provKey:
+        # Check seqNo before updating provider
+        let existingProv = ?SignedPeerRecord.decode(record.val)
+        if existingProv.data.seqNo < provider.data.seqNo:
+          trace "Provider key exists, updating with newer seqNo", id, peerId
+          updated.add(RawRecord.init(record.key, encode(provider), record.token))
+        else:
+          trace "Existing provider has same or newer seqNo, keeping", id, peerId
+          # Keep existing record unchanged
+          updated.add(RawRecord.init(record.key, record.val, record.token))
       else:
-        self.ttl.seconds + now
-    ttl = endians2.toBytesBE(expires.uint64)
+        # TTL record - always update with new expiry
+        trace "Updating TTL record", id, peerId
+        updated.add(
+          RawRecord.init(record.key, encode(expires.uint64.ArchUnixTime), record.token)
+        )
 
-    bytes: seq[byte] =
-      if existing =? (await self.getProvByKey(provKey)) and
-        existing.data.seqNo >= provider.data.seqNo:
-        trace "Provider with same seqNo already exist", seqNo = $provider.data.seqNo
-        @[]
-      else:
-        without bytes =? provider.envelope.encode:
-          trace "Enable to encode provider"
-          return failure "Unable to encode provider"
-        bytes
+    success updated
 
-  if bytes.len > 0:
-    trace "Adding or updating provider record", id, peerId
-    if err =? (await self.store.put(provKey, bytes)).errorOption:
-      trace "Unable to store provider with key", key = provKey, err = err.msg
+  # Batch both records into single atomic operation
+  trace "Adding or updating provider and cid records atomically", id, peerId
+  let failedRecords =
+    ?(
+      await self.store.tryPut(
+        @[
+          RawRecord.init(provKey, encode(provider), 0),
+          RawRecord.init(cidKey, encode(expires.uint64.ArchUnixTime), 0),
+        ],
+        middleware = updateMiddleware,
+      )
+    )
 
-  trace "Adding or updating id", id, key = cidKey, ttl = expires.seconds
-  if err =? (await self.store.put(cidKey, @ttl)).errorOption:
-    trace "Unable to store provider with key", key = cidKey, err = err.msg
+  if failedRecords.len > 0:
     return
+      failure newException(KVStoreError, "Unable to add provider due to conflict")
 
   self.cache.add(id, provider)
   trace "Provider for id added", cidKey, provKey
   return success()
 
 proc get*(
-  self: ProvidersManager,
-  id: NodeId,
-  start = 0,
-  stop = MaxProvidersPerEntry.int): Future[?!seq[SignedPeerRecord]] {.async.} =
+    self: ProvidersManager, id: NodeId, start = 0, stop = MaxProvidersPerEntry.int
+): Future[?!seq[SignedPeerRecord]] {.async.} =
   trace "Retrieving providers from persistent store", id
 
-  let
-    provs = self.cache.get(id, start = start, stop = stop)
+  let provs = self.cache.get(id, start = start, stop = stop)
 
   if provs.len > 0:
     return success provs
 
-  without cidKey =? (CidKey / id.toHex), err:
-    return failure err.msg
+  let cidKey = ?(CidKey / id.toHex)
 
   trace "Querying providers from persistent store", id, key = cidKey
-  var
-    providers: seq[SignedPeerRecord]
-
+  var providers: seq[SignedPeerRecord]
   block:
-    without cidIter =?
-      (await self.store.query(Query.init(cidKey, offset = start, limit = stop))), err:
-      return failure err.msg
+    let
+      q = Query.init(cidKey, offset = start, limit = stop)
+      cidIter = ?(await query[void](self.store, q))
 
     defer:
       if not isNil(cidIter):
         trace "Cleaning up query iterator"
         cidIter.dispose()
 
-    var keys: seq[Key]
+    var orphanedRecords: seq[KeyRecord]
     for item in cidIter:
-      # TODO: =? doesn't support tuples
-      if (maybeKey, val) =? (await item) and key =? maybeKey:
-        without pairs =? key.fromCidKey() and
-          provKey =? makeProviderKey(pairs.peerId), err:
-          trace "Error creating key from provider record", err = err.msg
-          continue
+      if maybeRecord =? (await item) and record =? maybeRecord:
+        let
+          key = record.key
+          pairs = ?key.fromCidKey()
+          provKey = ?makeProviderKey(pairs.peerId)
 
         trace "Querying provider key", key = provKey
-        without data =? (await self.store.get(provKey)):
-          trace "Error getting provider", key = provKey
-          keys.add(key)
-          continue
-
-        without provider =? SignedPeerRecord.decode(data).mapErr(mapFailure), err:
-          trace "Unable to decode provider from store", err = err.msg
-          keys.add(key)
+        without provRecord =? (await get[SignedPeerRecord](self.store, provKey)):
+          # Provider not found - this is an orphaned cid entry
+          orphanedRecords.add(record)
           continue
 
         trace "Retrieved provider with key", key = provKey
-        providers.add(provider)
-        self.cache.add(id, provider)
+        providers.add(provRecord.val)
+        self.cache.add(id, provRecord.val)
 
-    trace "Deleting keys without provider from store", len = keys.len
-    if keys.len > 0 and err =? (await self.store.delete(keys)).errorOption:
-      trace "Error deleting records from persistent store", err = err.msg
-      return failure err
+    # TODO: Should we really remove orphaned records here?
+    trace "Deleting orphaned cid entries from store", len = orphanedRecords.len
+    if orphanedRecords.len > 0 and
+        err =? (await self.store.delete(orphanedRecords)).errorOption:
+      trace "Error deleting orphaned records from persistent store", err = err.msg
 
     trace "Retrieved providers from persistent store", id = id, len = providers.len
   return success providers
 
 proc contains*(
-  self: ProvidersManager,
-  id: NodeId,
-  peerId: PeerId): Future[bool] {.async.} =
+    self: ProvidersManager, id: NodeId, peerId: PeerId
+): Future[bool] {.async.} =
   without key =? makeCidKey(id, peerId), err:
     return false
 
@@ -184,14 +175,13 @@ proc contains*(self: ProvidersManager, peerId: PeerId): Future[bool] {.async.} =
   return (await self.store.has(provKey)) |? false
 
 proc contains*(self: ProvidersManager, id: NodeId): Future[bool] {.async.} =
-  without cidKey =? (CidKey / $id), err:
+  without cidKey =? (CidKey / id.toHex), err:
     return false
 
-  let
-    q = Query.init(cidKey, limit = 1)
+  let q = Query.init(cidKey, limit = 1)
 
   block:
-    without iter =? (await self.store.query(q)), err:
+    without iter =? (await query[void](self.store, q)), err:
       trace "Unable to obtain record for key", key = cidKey
       return false
 
@@ -201,64 +191,67 @@ proc contains*(self: ProvidersManager, id: NodeId): Future[bool] {.async.} =
         iter.dispose()
 
     for item in iter:
-      if (key, _) =? (await item) and key.isSome:
+      if maybeRecord =? (await item) and maybeRecord.isSome:
         return true
 
   return false
 
 proc remove*(self: ProvidersManager, id: NodeId): Future[?!void] {.async.} =
-
   self.cache.drop(id)
-  without cidKey =? (CidKey / $id), err:
-    return failure(err.msg)
-
   let
+    cidKey = ?(CidKey / id.toHex)
     q = Query.init(cidKey)
 
   block:
-    without iter =? (await self.store.query(q)), err:
-      trace "Unable to obtain record for key", key = cidKey
-      return failure err
+    let iter = ?(await query[void](self.store, q))
 
     defer:
       if not isNil(iter):
         trace "Cleaning up query iterator"
         iter.dispose()
 
-    var
-      keys: seq[Key]
+    var records: seq[KeyRecord]
 
     for item in iter:
-      if (maybeKey, _) =? (await item) and key =? maybeKey:
-
-        keys.add(key)
-        without pairs =? key.fromCidKey, err:
-          trace "Unable to parse peer id from key", key
-          return failure err
-
+      if maybeRecord =? (await item) and record =? maybeRecord:
+        records.add(record)
+        let pairs = ?record.key.fromCidKey
         self.cache.remove(id, pairs.peerId)
-        trace "Deleted record from store", key
+        trace "Deleted record from store", key = record.key
 
-    if keys.len > 0 and err =? (await self.store.delete(keys)).errorOption:
-      trace "Error deleting record from persistent store", err = err.msg
-      return failure err
+    if records.len > 0:
+      # User-initiated remove - use tryDelete with refetch middleware
+      proc refetchMiddleware(
+          failed: seq[KeyRecord]
+      ): Future[?!seq[KeyRecord]] {.async: (raises: [CancelledError]).} =
+        var refreshed: seq[KeyRecord]
+        for r in failed:
+          let rec = (await get[void](self.store, r.key)).valueOr:
+            continue
+          refreshed.add(rec)
+        success refreshed
+
+      if err =?
+          (await self.store.tryDelete(records, middleware = refetchMiddleware)).errorOption:
+        trace "Error deleting record from persistent store", err = err.msg
+        return failure err
 
   return success()
 
 proc remove*(
-  self: ProvidersManager,
-  peerId: PeerId,
-  entries = false): Future[?!void] {.async.} =
+    self: ProvidersManager, peerId: PeerId, entries = false
+): Future[?!void] {.async.} =
+  var allRecords: seq[KeyRecord]
 
+  # Collect all cid entries for this peerId if requested
   if entries:
     without cidKey =? (CidKey / "*" / $peerId), err:
       return failure err
 
-    let
-      q = Query.init(cidKey)
+    let q = Query.init(cidKey)
 
     block:
-      without iter =? (await self.store.query(q)), err:
+      without iter =? (await query[void](self.store, q)), err:
         trace "Unable to obtain record for key", key = cidKey
         return failure err
 
@@ -267,42 +260,67 @@ proc remove*(
           trace "Cleaning up query iterator"
           iter.dispose()
 
-      var
-        keys: seq[Key]
-
       for item in iter:
-        if (maybeKey, _) =? (await item) and key =? maybeKey:
-          keys.add(key)
+        if maybeRecord =? (await item) and record =? maybeRecord:
+          allRecords.add(record)
 
-          let
-            parts = key.id.split(datastore.Separator)
+      trace "Collected cid entries for deletion", count = allRecords.len
 
-      if keys.len > 0 and err =? (await self.store.delete(keys)).errorOption:
-        trace "Error deleting record from persistent store", err = err.msg
-        return failure err
-
-      trace "Deleted records from store"
-
+  # Add provider record to the batch
   without provKey =? peerId.makeProviderKey, err:
     return failure err
 
   trace "Removing provider from cache", peerId
   self.cache.remove(peerId)
 
-  trace "Removing provider record", key = provKey
-  return (await self.store.delete(provKey))
+  trace "Checking for provider record", key = provKey
+  if provRecord =? (await get[SignedPeerRecord](self.store, provKey)):
+    allRecords.add(provRecord.toKeyRecord)
+
+  # Single atomic delete of all records (cid entries + provider)
+  if allRecords.len > 0:
+    let refetchMiddleware = proc(
+        failed: seq[KeyRecord]
+    ): Future[?!seq[KeyRecord]] {.async: (raises: [CancelledError]).} =
+      var refreshed: seq[KeyRecord]
+      for r in failed:
+        let rec = (await get[void](self.store, r.key)).valueOr:
+          continue
+        refreshed.add(rec)
+      success refreshed
+
+    trace "Deleting all records atomically", count = allRecords.len
+    if err =?
+        (await self.store.tryDelete(allRecords, middleware = refetchMiddleware)).errorOption:
+      trace "Error deleting records from persistent store", err = err.msg
+      return failure err
+
+    trace "Deleted records from store"
+
+  return success()
 
 proc remove*(
-  self: ProvidersManager,
-  id: NodeId,
-  peerId: PeerId): Future[?!void] {.async.} =
-
+    self: ProvidersManager, id: NodeId, peerId: PeerId
+): Future[?!void] {.async.} =
   self.cache.remove(id, peerId)
   without cidKey =? makeCidKey(id, peerId), err:
     trace "Error creating key from content id", err = err.msg
     return failure err.msg
 
-  return (await self.store.delete(cidKey))
+  without record =? (await get[ArchUnixTime](self.store, cidKey)):
+    return success() # already doesn't exist
+
+  # User-initiated remove - use tryDelete with refetch middleware
+  let refetchMiddleware = proc(
+      failed: seq[Record[ArchUnixTime]]
+  ): Future[?!seq[Record[ArchUnixTime]]] {.async: (raises: [CancelledError]).} =
+    var refreshed: seq[Record[ArchUnixTime]]
+    for r in failed:
+      if rec =? (await get[ArchUnixTime](self.store, r.key)):
+        refreshed.add(rec)
+    success refreshed
+
+  return (await self.store.tryDelete(record, middleware = refetchMiddleware))
 
 proc cleanupExpiredLoop(self: ProvidersManager) {.async.} =
   try:
@@ -337,24 +355,22 @@ proc stop*(self: ProvidersManager) {.async.} =
   self.started = false
 
 func new*(
-  T: type ProvidersManager,
-  store: Datastore,
-  disableCache = false,
-  ttl = DefaultProviderTTL,
-  maxItems = MaxProvidersEntries,
-  maxProviders = MaxProvidersPerEntry,
-  batchSize = ExpiredCleanupBatch,
-  cleanupInterval = CleanupInterval): T =
-
+    T: type ProvidersManager,
+    store: KVStore,
+    disableCache = false,
+    maxItems = MaxProvidersEntries,
+    maxProviders = MaxProvidersPerEntry,
+    batchSize = ExpiredCleanupBatch,
+    cleanupInterval = CleanupInterval,
+): T =
   T(
     store: store,
-    ttl: ttl,
     maxItems: maxItems,
     maxProviders: maxProviders,
     disableCache: disableCache,
     batchSize: batchSize,
     cleanupInterval: cleanupInterval,
     cache: ProvidersCache.init(
-      size = maxItems,
-      maxProviders = maxProviders,
-      disable = disableCache))
+      size = maxItems, maxProviders = maxProviders, disable = disableCache
+    ),
+  )

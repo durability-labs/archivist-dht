@@ -13,7 +13,7 @@ from std/times import now, utc, toTime, toUnix
 import pkg/stew/endians2
 import pkg/chronos
 import pkg/libp2p
-import pkg/datastore
+import pkg/kvstore
 import pkg/chronicles
 import pkg/questionable
 import pkg/questionable/results
@@ -24,16 +24,13 @@ const
   ExpiredCleanupBatch* = 1000
   CleanupInterval* = 24.hours
 
-proc cleanupExpired*(
-  store: Datastore,
-  batchSize = ExpiredCleanupBatch) {.async.} =
+proc cleanupExpired*(store: KVStore, batchSize = ExpiredCleanupBatch) {.async.} =
   trace "Cleaning up expired records"
 
-  let
-    q = Query.init(CidKey, limit = batchSize)
+  let q = Query.init(CidKey, limit = batchSize)
 
   block:
-    without iter =? (await store.query(q)), err:
+    without iter =? (await query[ArchUnixTime](store, q)), err:
       trace "Unable to obtain record for key", err = err.msg
       return
 
@@ -42,42 +39,38 @@ proc cleanupExpired*(
         trace "Cleaning up query iterator"
         iter.dispose()
 
-    var
-      keys = newSeq[Key]()
-
-    let
-      now = times.now().utc().toTime().toUnix()
-
+    var records = newSeq[Record[ArchUnixTime]]()
+    let now = nowMs()
     for item in iter:
-      if (maybeKey, data) =? (await item) and key =? maybeKey:
+      if recordMaybe =? (await item) and record =? recordMaybe:
         let
-          expired = endians2.fromBytesBE(uint64, data).int64
+          expired = record.val.int64
+          key = record.key
 
         if now >= expired:
           trace "Found expired record", key
-          keys.add(key)
+          records.add(record)
           without pairs =? key.fromCidKey(), err:
             trace "Error extracting parts from cid key", key
             continue
 
-        if keys.len >= batchSize:
+        if records.len >= batchSize:
           break
 
-    if err =? (await store.delete(keys)).errorOption:
-      trace "Error cleaning up batch, records left intact!", size = keys.len, err = err.msg
+    # Background cleanup - simple delete, will retry next cycle if conflict
+    if err =? (await store.delete(records)).errorOption:
+      trace "Error cleaning up batch, records left intact!",
+        size = records.len, err = err.msg
 
-    trace "Cleaned up expired records", size = keys.len
+    trace "Cleaned up expired records", size = records.len
 
-proc cleanupOrphaned*(
-  store: Datastore,
-  batchSize = ExpiredCleanupBatch) {.async.} =
+proc cleanupOrphaned*(store: KVStore, batchSize = ExpiredCleanupBatch) {.async.} =
   trace "Cleaning up orphaned records"
 
-  let
-    providersQuery = Query.init(ProvidersKey, limit = batchSize, value = false)
+  let providersQuery = Query.init(ProvidersKey, limit = batchSize, value = false)
 
   block:
-    without iter =? (await store.query(providersQuery)), err:
+    without iter =? (await query[void](store, providersQuery)), err:
       trace "Unable to obtain record for key"
       return
 
@@ -92,7 +85,8 @@ proc cleanupOrphaned*(
         trace "Batch cleaned up", size = batchSize
 
       count.inc
-      if (maybeKey, _) =? (await item) and key =? maybeKey:
+      if maybeRecord =? (await item) and record =? maybeRecord:
+        let key = record.key
         without peerId =? key.fromProvKey(), err:
           trace "Error extracting parts from cid key", key
           continue
@@ -101,17 +95,17 @@ proc cleanupOrphaned*(
           trace "Error building cid key", err = err.msg
           continue
 
-        without cidIter =? (await store.query(Query.init(cidKey, limit = 1, value = false))), err:
+        without cidIter =?
+          (await query[void](store, Query.init(cidKey, limit = 1, value = false))), err:
           trace "Error querying key", cidKey, err = err.msg
           continue
 
-        let
-          res = block:
-            var count = 0
-            for item in cidIter:
-              if (key, _) =? (await item) and key.isSome:
-                count.inc
-            count
+        let res = block:
+          var count = 0
+          for item in cidIter:
+            if maybeRecord =? (await item) and maybeRecord.isSome:
+              count.inc
+          count
 
         if not isNil(cidIter):
           trace "Disposing cid iter"
@@ -121,7 +115,8 @@ proc cleanupOrphaned*(
           trace "Peer not orphaned, skipping", peerId
           continue
 
-        if err =? (await store.delete(key)).errorOption:
+        # Background cleanup - simple delete, will retry next cycle if conflict
+        if err =? (await store.delete(record)).errorOption:
           trace "Error deleting orphaned peer", err = err.msg
           continue
 
