@@ -10,7 +10,7 @@ import std/strutils
 import std/times
 
 import pkg/stew/endians2
-import pkg/datastore
+import pkg/kvstore
 import pkg/chronos
 import pkg/libp2p
 import pkg/chronicles
@@ -25,7 +25,7 @@ import ./cache
 import ./common
 import ../spr
 
-export cache, datastore
+export cache, kvstore
 
 logScope:
   topics = "discv5 providers manager"
@@ -33,7 +33,7 @@ logScope:
 const DefaultProviderTTL* = initDuration(hours = 24).inMilliseconds()
 
 type ProvidersManager* = ref object of RootObj
-  store*: Datastore
+  store*: KVStore
   cache*: ProvidersCache
   maxItems*: uint
   maxProviders*: uint
@@ -103,7 +103,7 @@ proc add*(
 
   if failedRecords.len > 0:
     return
-      failure newException(DatastoreError, "Unable to add provider due to conflict")
+      failure newException(KVStoreError, "Unable to add provider due to conflict")
 
   self.cache.add(id, provider)
   trace "Provider for id added", cidKey, provKey
@@ -356,7 +356,7 @@ proc stop*(self: ProvidersManager) {.async.} =
 
 func new*(
     T: type ProvidersManager,
-    store: Datastore,
+    store: KVStore,
     disableCache = false,
     maxItems = MaxProvidersEntries,
     maxProviders = MaxProvidersPerEntry,

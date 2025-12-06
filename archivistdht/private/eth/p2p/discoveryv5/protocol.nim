@@ -1127,7 +1127,7 @@ proc newProtocol*(
     config = defaultDiscoveryConfig,
     rng = newRng(),
     providers = ProvidersManager.new(
-      SQLiteDatastore.new(Memory)
+      SQLiteKVStore.new(Memory)
       .expect("Should not fail!"))
 ): Protocol =
   # TODO: Tried adding bindPort = udpPort as parameter but that gave
@@ -1192,7 +1192,7 @@ proc newProtocol*(
     bindIp = IPv4_any(),
     config = defaultDiscoveryConfig,
     rng = newRng(),
-    providers = ProvidersManager.new(SQLiteDatastore.new(Memory)
+    providers = ProvidersManager.new(SQLiteKVStore.new(Memory)
                                 .expect("Should not fail!"))
 ): Protocol =
   ## Initialize DHT protocol

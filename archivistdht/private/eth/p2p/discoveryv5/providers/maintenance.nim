@@ -13,7 +13,7 @@ from std/times import now, utc, toTime, toUnix
 import pkg/stew/endians2
 import pkg/chronos
 import pkg/libp2p
-import pkg/datastore
+import pkg/kvstore
 import pkg/chronicles
 import pkg/questionable
 import pkg/questionable/results
@@ -24,7 +24,7 @@ const
   ExpiredCleanupBatch* = 1000
   CleanupInterval* = 24.hours
 
-proc cleanupExpired*(store: Datastore, batchSize = ExpiredCleanupBatch) {.async.} =
+proc cleanupExpired*(store: KVStore, batchSize = ExpiredCleanupBatch) {.async.} =
   trace "Cleaning up expired records"
 
   let q = Query.init(CidKey, limit = batchSize)
@@ -64,7 +64,7 @@ proc cleanupExpired*(store: Datastore, batchSize = ExpiredCleanupBatch) {.async.
 
     trace "Cleaned up expired records", size = records.len
 
-proc cleanupOrphaned*(store: Datastore, batchSize = ExpiredCleanupBatch) {.async.} =
+proc cleanupOrphaned*(store: KVStore, batchSize = ExpiredCleanupBatch) {.async.} =
   trace "Cleaning up orphaned records"
 
   let providersQuery = Query.init(ProvidersKey, limit = batchSize, value = false)

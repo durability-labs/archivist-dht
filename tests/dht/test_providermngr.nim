@@ -3,7 +3,7 @@ import std/times
 
 import pkg/chronos
 import pkg/asynctest/chronos/unittest
-import pkg/datastore
+import pkg/kvstore
 from pkg/libp2p import PeerId
 
 import archivistdht/private/eth/p2p/discoveryv5/spr
@@ -14,7 +14,7 @@ import ./test_helper
 
 suite "Test Providers Manager simple":
   let
-    ds = SQLiteDatastore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(Memory).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
     rng = newRng()
     privKey = PrivateKey.example(rng)
@@ -64,11 +64,11 @@ suite "Test Providers Manager multiple":
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
-    ds: SQLiteDatastore
+    ds: SQLiteKVStore
     manager: ProvidersManager
 
   setup:
-    ds = SQLiteDatastore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(Memory).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
 
     for id in nodeIds:
@@ -140,11 +140,11 @@ suite "Test providers with cache":
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
-    ds: SQLiteDatastore
+    ds: SQLiteKVStore
     manager: ProvidersManager
 
   setup:
-    ds = SQLiteDatastore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(Memory).tryGet()
     manager = ProvidersManager.new(ds)
 
     for id in nodeIds:
@@ -210,11 +210,11 @@ suite "Test Provider Maintenance":
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
-    ds: SQLiteDatastore
+    ds: SQLiteKVStore
     manager: ProvidersManager
 
   setupAll:
-    ds = SQLiteDatastore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(Memory).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
 
     for id in nodeIds:
