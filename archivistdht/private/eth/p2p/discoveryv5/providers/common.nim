@@ -12,7 +12,7 @@ import std/times
 
 import pkg/chronos
 import pkg/libp2p
-import pkg/datastore
+import pkg/kvstore
 import pkg/stew/endians2
 import pkg/questionable
 import pkg/questionable/results
@@ -62,7 +62,7 @@ proc makeCidKey*(cid: NodeId, peerId: PeerId): ?!Key =
   (CidKey / cid.toHex / $peerId / "ttl")
 
 proc fromCidKey*(key: Key): ?!tuple[id: NodeId, peerId: PeerId] =
-  let parts = key.id.split(datastore.Separator)
+  let parts = key.id.split(kvstore.Separator)
 
   if parts.len == 5:
     let
@@ -74,7 +74,7 @@ proc fromCidKey*(key: Key): ?!tuple[id: NodeId, peerId: PeerId] =
   return failure("Unable to extract peer id from key")
 
 proc fromProvKey*(key: Key): ?!PeerId =
-  let parts = key.id.split(datastore.Separator)
+  let parts = key.id.split(kvstore.Separator)
 
   if parts.len != 3:
     return failure("Can't find peer id in key")
