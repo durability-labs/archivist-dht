@@ -180,10 +180,10 @@
         "sha1": "fcbc5208d6a95bffea80ca11946c2b7a226b9a2d"
       }
     },
-    "datastore": {
-      "version": "0.4.0",
-      "vcsRevision": "fa68e854cadf4664502728a650dd560a3011f9a9",
-      "url": "https://github.com/durability-labs/nim-datastore",
+    "kvstore": {
+      "version": "0.1.0",
+      "vcsRevision": "61ef039a2325f4fa53be15bce4b4c26686b4c12e",
+      "url": "https://github.com/durability-labs/nim-kvstore",
       "downloadMethod": "git",
       "dependencies": [
         "asynctest",
@@ -194,7 +194,7 @@
         "unittest2"
       ],
       "checksums": {
-        "sha1": "e8c08ab969501062a63a7b4af12acfcf951cd0d7"
+        "sha1": "e8e996ff69b2e6463509fecae877f1ac8cf458dd"
       }
     },
     "dnsclient": {
