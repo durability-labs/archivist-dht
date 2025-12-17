@@ -1,4 +1,4 @@
-version       = "0.7.1"
+version       = "0.7.2"
 author        = "Archivist DHT Authors, Status Research & Development GmbH"
 description   = "DHT based on Eth discv5 implementation"
 license       = "MIT"
