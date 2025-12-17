@@ -229,15 +229,16 @@ proc remove*(self: ProvidersManager, id: NodeId): Future[?!void] {.async.} =
       keys: seq[Key]
 
     for item in iter:
-      if (maybeKey, _) =? (await item) and key =? maybeKey:
+      if (maybeKey, _) =? (await item):
+        if key =? maybeKey:
 
-        keys.add(key)
-        without pairs =? key.fromCidKey, err:
-          trace "Unable to parse peer id from key", key
-          return failure err
+          keys.add(key)
+          without pairs =? key.fromCidKey, err:
+            trace "Unable to parse peer id from key", key
+            return failure err
 
-        self.cache.remove(id, pairs.peerId)
-        trace "Deleted record from store", key
+          self.cache.remove(id, pairs.peerId)
+          trace "Deleted record from store", key
 
     if keys.len > 0 and err =? (await self.store.delete(keys)).errorOption:
       trace "Error deleting record from persistent store", err = err.msg
@@ -271,11 +272,12 @@ proc remove*(
         keys: seq[Key]
 
       for item in iter:
-        if (maybeKey, _) =? (await item) and key =? maybeKey:
-          keys.add(key)
+        if (maybeKey, _) =? (await item):
+          if key =? maybeKey:
+            keys.add(key)
 
-          let
-            parts = key.id.split(datastore.Separator)
+            let
+              parts = key.id.split(datastore.Separator)
 
       if keys.len > 0 and err =? (await self.store.delete(keys)).errorOption:
         trace "Error deleting record from persistent store", err = err.msg
