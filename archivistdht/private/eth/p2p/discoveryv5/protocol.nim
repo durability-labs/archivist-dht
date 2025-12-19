@@ -576,10 +576,8 @@ proc handleMessage(d: Protocol, srcId: NodeId, fromAddr: Address,
   if message.kind == ping:
     # If the routing table wants more records,
     if d.routingTable.len < RoutingTableLowThreshold:
-      warn "Routing table below RoutingTableLowThreshold"
       # and if this srcId is not known to the routing table,
       if d.routingTable.getNode(srcId).isNone():
-        warn "Message received from unknown node"
         # then we ask the unknown node for its SPR
         asyncSpawn d.pickUpUnknownNode(srcId, fromAddr)
 
