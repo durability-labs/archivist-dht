@@ -3,7 +3,7 @@
 import
   chronos,
   bearssl/rand,
-  asynctest/chronos/unittest,
+  asynctest/chronos/unittest2,
   archivistdht/discv5/protocol as discv5_protocol,
   archivistdht/discv5/routing_table,
   ../dht/test_helper
