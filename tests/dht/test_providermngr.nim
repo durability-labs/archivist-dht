@@ -2,8 +2,9 @@ import std/sequtils
 import std/times
 
 import pkg/chronos
-import pkg/asynctest/chronos/unittest
+import pkg/asynctest/chronos/unittest2
 import pkg/kvstore
+import pkg/taskpools
 from pkg/libp2p import PeerId
 
 import archivistdht/private/eth/p2p/discoveryv5/spr
@@ -13,8 +14,9 @@ import archivistdht/private/eth/p2p/discoveryv5/lru
 import ./test_helper
 
 suite "Test Providers Manager simple":
+  var tp = Taskpool.new(num_threads = 4)
   let
-    ds = SQLiteKVStore.new(Memory).tryGet()
+    ds = SQLiteKVStore.new(SqliteMemory, tp).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
     rng = newRng()
     privKey = PrivateKey.example(rng)
@@ -23,6 +25,7 @@ suite "Test Providers Manager simple":
 
   teardownAll:
     (await ds.close()).tryGet()
+    tp.shutdown()
 
   test "Should add provider":
     (await manager.add(nodeId, provider)).tryGet
@@ -64,11 +67,13 @@ suite "Test Providers Manager multiple":
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
+    tp: Taskpool
     ds: SQLiteKVStore
     manager: ProvidersManager
 
   setup:
-    ds = SQLiteKVStore.new(Memory).tryGet()
+    tp = Taskpool.new(num_threads = 4)
+    ds = SQLiteKVStore.new(SqliteMemory, tp).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
 
     for id in nodeIds:
@@ -77,6 +82,7 @@ suite "Test Providers Manager multiple":
 
   teardown:
     (await ds.close()).tryGet()
+    tp.shutdown()
     ds = nil
     manager = nil
 
@@ -140,11 +146,13 @@ suite "Test providers with cache":
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
+    tp: Taskpool
     ds: SQLiteKVStore
     manager: ProvidersManager
 
   setup:
-    ds = SQLiteKVStore.new(Memory).tryGet()
+    tp = Taskpool.new(num_threads = 4)
+    ds = SQLiteKVStore.new(SqliteMemory, tp).tryGet()
     manager = ProvidersManager.new(ds)
 
     for id in nodeIds:
@@ -153,6 +161,7 @@ suite "Test providers with cache":
 
   teardown:
     (await ds.close()).tryGet()
+    tp.shutdown()
     ds = nil
     manager = nil
 
@@ -210,11 +219,13 @@ suite "Test Provider Maintenance":
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
 
   var
+    tp: Taskpool
     ds: SQLiteKVStore
     manager: ProvidersManager
 
   setupAll:
-    ds = SQLiteKVStore.new(Memory).tryGet()
+    tp = Taskpool.new(num_threads = 4)
+    ds = SQLiteKVStore.new(SqliteMemory, tp).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
 
     for id in nodeIds:
@@ -227,6 +238,7 @@ suite "Test Provider Maintenance":
 
   teardownAll:
     (await ds.close()).tryGet()
+    tp.shutdown()
     ds = nil
     manager = nil
 
@@ -236,7 +248,7 @@ suite "Test Provider Maintenance":
         (await manager.get(id)).tryGet.len == 10
 
     await sleepAsync(500.millis)
-    await manager.store.cleanupExpired()
+    (await manager.store.cleanupExpired()).tryGet()
 
     for id in nodeIds:
       check:
@@ -252,7 +264,7 @@ suite "Test Provider Maintenance":
     ).tryGet
 
     await sleepAsync(500.millis)
-    await manager.store.cleanupExpired()
+    (await manager.store.cleanupExpired()).tryGet()
 
     let unexpiredProvs = (await manager.get(nodeIds[0])).tryGet
 
@@ -267,7 +279,7 @@ suite "Test Provider Maintenance":
       check:
         (await manager.get(id)).tryGet.len == 0
 
-    await manager.store.cleanupOrphaned()
+    (await manager.store.cleanupOrphaned()).tryGet()
 
     for p in providers:
       check:

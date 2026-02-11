@@ -2,7 +2,7 @@
 
 import
   std/tables,
-  chronos, chronicles, stint, asynctest/chronos/unittest, 
+  chronos, chronicles, stint, asynctest/chronos/unittest2, 
   stew/byteutils, bearssl/rand,
   libp2p/crypto/crypto,
   archivistdht/discv5/[transport, spr, node, routing_table, encoding, sessions, nodes_verification],

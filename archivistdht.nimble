@@ -14,7 +14,14 @@ requires "metrics >= 0.1.0"
 requires "stew >= 0.2.0"
 requires "stint >= 0.8.1"
 requires "https://github.com/durability-labs/nim-kvstore >= 0.1.0"
+requires "taskpools >= 0.1.0"
 requires "questionable >= 0.10.15"
 
 taskRequires "test", "asynctest >= 0.5.2"
 taskRequires "test", "unittest2 >= 0.2.4"
+
+task format, "Format code using NPH":
+  # exec "nimble install https://github.com/durability-labs/nph@#version-0-6-2-prerelease" # TODO: update to version 0.6.2 once it is released
+  exec findExe("nph") & " archivistdht.nim"
+  exec findExe("nph") & " archivistdht/"
+  exec findExe("nph") & " tests/"

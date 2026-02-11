@@ -82,7 +82,9 @@ import
   pkg/stint,
   pkg/bearssl/rand,
   pkg/metrics,
-  pkg/results
+  pkg/results,
+  pkg/taskpools,
+  pkg/kvstore
 
 import "."/[
   messages,
@@ -515,7 +517,7 @@ proc pickUpUnknownNode(d: Protocol, fromId: NodeId, fromAddr: Address) {.async: 
     msg = FindNodeMessage(distances: @[0.uint16])
     reqId = RequestId.init(d.rng[])
     message = encodeMessage(msg, reqId)
-  
+
   debug "Sending query for unknown node's SPR"
   d.transport.sendMessage(fromId, fromAddr, message)
 
@@ -525,7 +527,7 @@ proc pickUpUnknownNode(d: Protocol, fromId: NodeId, fromAddr: Address) {.async: 
     if not response.isSome():
       debug "Got no response when querying unknown node"
       return
-    
+
     let resp = response.get()
     if resp.kind == MessageKind.nodes:
       let sprs = resp.nodes.sprs
@@ -778,7 +780,7 @@ proc addProvider*(
       let reqId = RequestId.init(d.rng[])
       d.sendRequest(toNode, AddProviderMessage(cId: cId, prov: pr), reqId)
     else:
-      asyncSpawn d.addProviderLocal(cId, pr)
+      await d.addProviderLocal(cId, pr)
 
   return res
 
@@ -1126,9 +1128,8 @@ proc newProtocol*(
     enrAutoUpdate = false,
     config = defaultDiscoveryConfig,
     rng = newRng(),
-    providers = ProvidersManager.new(
-      SQLiteKVStore.new(Memory)
-      .expect("Should not fail!"))
+    providers: ProvidersManager = nil,
+    tp: Taskpool = nil,
 ): Protocol =
   # TODO: Tried adding bindPort = udpPort as parameter but that gave
   # "Error: internal error: environment misses: udpPort" in nim-beacon-chain.
@@ -1142,6 +1143,16 @@ proc newProtocol*(
   # TODO:
   # - Defect as is now or return a result for spr errors?
   # - In case incorrect key, allow for new spr based on new key (new node id)?
+  let providers = if providers.isNil:
+    let pool = if tp.isNil:
+      try: Taskpool.new(num_threads = 4)
+      except CatchableError: raiseAssert "Failed to create Taskpool"
+    else: tp
+    ProvidersManager.new(
+      SQLiteKVStore.new(SqliteMemory, pool).expect("Should not fail!"))
+  else:
+    providers
+
   var record: SignedPeerRecord
   if previousRecord.isSome():
     record = previousRecord.get()
@@ -1192,11 +1203,20 @@ proc newProtocol*(
     bindIp = IPv4_any(),
     config = defaultDiscoveryConfig,
     rng = newRng(),
-    providers = ProvidersManager.new(SQLiteKVStore.new(Memory)
-                                .expect("Should not fail!"))
+    providers: ProvidersManager = nil,
+    tp: Taskpool = nil,
 ): Protocol =
   ## Initialize DHT protocol
   ##
+  let providers = if providers.isNil:
+    let pool = if tp.isNil:
+      try: Taskpool.new(num_threads = 4)
+      except CatchableError: raiseAssert "Failed to create Taskpool"
+    else: tp
+    ProvidersManager.new(
+      SQLiteKVStore.new(SqliteMemory, pool).expect("Should not fail!"))
+  else:
+    providers
 
   info "Discovery SPR initialized", seqNum = record.seqNum, uri = toURI(record)
 

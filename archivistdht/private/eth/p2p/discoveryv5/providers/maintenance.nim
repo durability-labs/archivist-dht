@@ -8,7 +8,6 @@
 {.push raises: [].}
 
 import std/options
-from std/times import now, utc, toTime, toUnix
 
 import pkg/stew/endians2
 import pkg/chronos
@@ -24,25 +23,27 @@ const
   ExpiredCleanupBatch* = 1000
   CleanupInterval* = 24.hours
 
-proc cleanupExpired*(store: KVStore, batchSize = ExpiredCleanupBatch) {.async.} =
+proc cleanupExpired*(
+    store: KVStore, batchSize = ExpiredCleanupBatch
+): Future[?!void] {.async: (raises: [CancelledError]).} =
   trace "Cleaning up expired records"
 
   let q = Query.init(CidKey, limit = batchSize)
 
   block:
-    without iter =? (await query[ArchUnixTime](store, q)), err:
-      trace "Unable to obtain record for key", err = err.msg
-      return
+    let iter = ?await query(store, q, ArchUnixTime)
 
     defer:
       if not isNil(iter):
         trace "Cleaning up query iterator"
-        iter.dispose()
+        if err =? (await iter.dispose()).errorOption:
+          warn "Error disposing query iterator", err = err.msg
 
-    var records = newSeq[Record[ArchUnixTime]]()
+    var records = newSeq[KVRecord[ArchUnixTime]]()
     let now = nowMs()
-    for item in iter:
-      if recordMaybe =? (await item) and record =? recordMaybe:
+    while not iter.finished:
+      let recordMaybe = ?await iter.next()
+      if record =? recordMaybe:
         let
           expired = record.val.int64
           key = record.key
@@ -64,60 +65,64 @@ proc cleanupExpired*(store: KVStore, batchSize = ExpiredCleanupBatch) {.async.} 
 
     trace "Cleaned up expired records", size = records.len
 
-proc cleanupOrphaned*(store: KVStore, batchSize = ExpiredCleanupBatch) {.async.} =
+  return success()
+
+proc cleanupOrphaned*(
+    store: KVStore, batchSize = ExpiredCleanupBatch
+): Future[?!void] {.async: (raises: [CancelledError]).} =
   trace "Cleaning up orphaned records"
 
   let providersQuery = Query.init(ProvidersKey, limit = batchSize, value = false)
-
   block:
-    without iter =? (await query[void](store, providersQuery)), err:
-      trace "Unable to obtain record for key"
-      return
+    let iter = ?await query(store, providersQuery)
 
     defer:
       if not isNil(iter):
         trace "Cleaning up orphaned query iterator"
-        iter.dispose()
+        if err =? (await iter.dispose()).errorOption:
+          warn "Unable to dispose query iter", err = err.msg
 
     var count = 0
-    for item in iter:
+    while not iter.finished:
       if count >= batchSize:
         trace "Batch cleaned up", size = batchSize
+        break
 
       count.inc
-      if maybeRecord =? (await item) and record =? maybeRecord:
-        let key = record.key
-        without peerId =? key.fromProvKey(), err:
-          trace "Error extracting parts from cid key", key
-          continue
+      let maybeRecord = ?await iter.next()
+      without record =? maybeRecord:
+        continue
 
-          without cidKey =? (CidKey / "*" / $peerId), err:
-            trace "Error building cid key", err = err.msg
-            continue
+      let key = record.key
+      without peerId =? key.fromProvKey(), err:
+        trace "Error extracting parts from cid key", key
+        continue
 
-        without cidIter =?
-          (await query[void](store, Query.init(cidKey, limit = 1, value = false))), err:
-          trace "Error querying key", cidKey, err = err.msg
-          continue
+      without cidKey =? (CidKey / "*" / $peerId), err:
+        trace "Error building cid key", err = err.msg
+        continue
 
-        let res = block:
-          var count = 0
-          for item in cidIter:
-            if maybeRecord =? (await item) and maybeRecord.isSome:
-              count.inc
-          count
+      without cidIter =?
+        (await query(store, Query.init(cidKey, limit = 1, value = false))), err:
+        trace "Error querying key", cidKey, err = err.msg
+        continue
 
-          if not isNil(cidIter):
-            trace "Disposing cid iter"
-            cidIter.dispose()
+      let res = block:
+        defer:
+          if err =? (await cidIter.dispose()).errorOption:
+            warn "Unable to dispose cid query iter", err = err.msg
 
-          if res > 0:
-            trace "Peer not orphaned, skipping", peerId
-            continue
+        (?await cidIter.fetchAll()).len
 
-        # Background cleanup - simple delete, will retry next cycle if conflict
-        if err =? (await store.delete(record)).errorOption:
-          trace "Error deleting orphaned peer", err = err.msg
-          continue
+      if res > 0:
+        trace "Peer not orphaned, skipping", peerId
+        continue
 
-          trace "Cleaned up orphaned peer", peerId
+      # Background cleanup - simple delete, will retry next cycle if conflict
+      if err =? (await store.delete(record)).errorOption:
+        trace "Error deleting orphaned peer", err = err.msg
+        continue
+
+      trace "Cleaned up orphaned peer", peerId
+
+  return success()
