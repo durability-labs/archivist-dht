@@ -290,7 +290,7 @@ proc close*(t: Transport) =
   t.transp.close
 
 proc closed*(t: Transport) : bool =
-  t.transp.closed
+  t.transp.isNil or t.transp.closed
 
 proc closeWait*(t: Transport) {.async.} =
   await t.transp.closeWait
