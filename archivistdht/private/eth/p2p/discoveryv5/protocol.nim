@@ -1263,7 +1263,8 @@ proc start*(d: Protocol) {.async.} =
   await d.providers.start()
 
 proc closeWait*(d: Protocol) {.async.} =
-  doAssert(not d.transport.closed)
+  if not d.transport.isNil and d.transport.closed:
+    return
 
   debug "Closing discovery node", node = d.localNode
   if not d.revalidateLoop.isNil:
