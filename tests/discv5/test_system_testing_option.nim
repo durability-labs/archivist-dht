@@ -6,6 +6,7 @@ import
   asynctest/chronos/unittest2,
   archivistdht/discv5/protocol as discv5_protocol,
   archivistdht/discv5/routing_table,
+  archivistdht/private/eth/p2p/discoveryv5/random2,
   ../dht/test_helper
 
 suite "Archivist system testing options Tests":
@@ -15,7 +16,7 @@ suite "Archivist system testing options Tests":
     node2: discv5_protocol.Protocol
 
   setup:
-    rng = newRng()
+    rng = newDrbg()
     node1 = initDiscoveryNode(
       rng, PrivateKey.example(rng), localAddress(20301))
     node2 = initDiscoveryNode(

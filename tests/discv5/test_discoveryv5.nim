@@ -8,13 +8,14 @@ import
   archivistdht/discv5/[transport, spr, node, routing_table, encoding, sessions, nodes_verification],
   archivistdht/discv5/crypto as dhtcrypto,
   archivistdht/discv5/protocol as discv5_protocol,
+  archivistdht/private/eth/p2p/discoveryv5/random2,
   ../dht/test_helper
 
 suite "Discovery v5 Tests":
   var rng: ref HmacDrbgContext
 
   setup:
-    rng = newRng()
+    rng = newDrbg()
 
   test "GetNode":
     # TODO: This could be tested in just a routing table only context
@@ -239,7 +240,7 @@ suite "Discovery v5 Tests":
       testNode = initDiscoveryNode(rng, testNodeKey, localAddress(20302))
       # logarithmic distance between mainNode and testNode is 256
 
-    let nodes = nodesAtDistance(mainNode.localNode, rng[], dist, 10)
+    let nodes = nodesAtDistance(mainNode.localNode, rng, dist, 10)
     for n in nodes:
       discard mainNode.addSeenNode(n) # for testing only!
 
@@ -283,7 +284,7 @@ suite "Discovery v5 Tests":
     check discovered.isOk
     check discovered[].len == 0
 
-    let moreNodes = nodesAtDistance(mainNode.localNode, rng[], dist, 10)
+    let moreNodes = nodesAtDistance(mainNode.localNode, rng, dist, 10)
     for n in moreNodes:
       discard mainNode.addSeenNode(n) # for testing only!
 

@@ -11,6 +11,7 @@ import archivistdht/private/eth/p2p/discoveryv5/spr
 import archivistdht/private/eth/p2p/discoveryv5/providers
 import archivistdht/discv5/node
 import archivistdht/private/eth/p2p/discoveryv5/lru
+import archivistdht/private/eth/p2p/discoveryv5/random2
 import ./test_helper
 
 suite "Test Providers Manager simple":
@@ -18,7 +19,7 @@ suite "Test Providers Manager simple":
   let
     ds = SQLiteKVStore.new(SqliteMemory, tp).tryGet()
     manager = ProvidersManager.new(ds, disableCache = true)
-    rng = newRng()
+    rng = newDrbg()
     privKey = PrivateKey.example(rng)
     provider = privKey.toSignedPeerRecord()
     nodeId = NodeId.example(rng)
@@ -61,7 +62,7 @@ suite "Test Providers Manager simple":
 
 suite "Test Providers Manager multiple":
   let
-    rng = newRng()
+    rng = newDrbg()
     privKeys = (0 ..< 10).mapIt(PrivateKey.example(rng))
     providers = privKeys.mapIt(it.toSignedPeerRecord())
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
@@ -140,7 +141,7 @@ suite "Test Providers Manager multiple":
 
 suite "Test providers with cache":
   let
-    rng = newRng()
+    rng = newDrbg()
     privKeys = (0 ..< 10).mapIt(PrivateKey.example(rng))
     providers = privKeys.mapIt(it.toSignedPeerRecord())
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))
@@ -213,7 +214,7 @@ suite "Test providers with cache":
 
 suite "Test Provider Maintenance":
   let
-    rng = newRng()
+    rng = newDrbg()
     privKeys = (0 ..< 10).mapIt(PrivateKey.example(rng))
     providers = privKeys.mapIt(it.toSignedPeerRecord())
     nodeIds = (0 ..< 100).mapIt(NodeId.example(rng))

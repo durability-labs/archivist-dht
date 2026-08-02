@@ -8,6 +8,7 @@ import
   chronicles,
   std/[options, strutils, sugar],
   std/net,
+  pkg/protobuf_serialization,
   pkg/stew/[byteutils, arrayops],
   pkg/results,
   stew/endians2,

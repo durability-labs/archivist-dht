@@ -26,6 +26,7 @@ import
   libp2p/signed_envelope,
   metrics,
   nimcrypto,
+  pkg/protobuf_serialization,
   pkg/results,
   "."/[messages, messages_encoding, node, spr, hkdf, sessions],
   "."/crypto

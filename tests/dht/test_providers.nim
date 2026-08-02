@@ -19,12 +19,13 @@ import
   libp2p/[multiaddress, multicodec, multihash, routing_record, signed_envelope],
   archivistdht/discv5/crypto as dhtcrypto,
   archivistdht/discv5/protocol as discv5_protocol,
+  archivistdht/private/eth/p2p/discoveryv5/random2,
   test_helper
 
 proc bootstrapNodes(
     nodecount: int,
     bootnodes: seq[SignedPeerRecord],
-    rng = newRng(),
+    rng = newDrbg(),
     delay: int = 0
   ) : Future[seq[(discv5_protocol.Protocol, PrivateKey)]] {.async.} =
 
@@ -42,7 +43,7 @@ proc bootstrapNodes(
 
 proc bootstrapNetwork(
     nodecount: int,
-    rng = newRng(),
+    rng = newDrbg(),
     delay: int = 0
   ) : Future[seq[(discv5_protocol.Protocol, PrivateKey)]] {.async.} =
 
@@ -75,7 +76,7 @@ suite "Providers Tests: node alone":
     peerRec0: PeerRecord
 
   setupAll:
-    rng = newRng()
+    rng = newDrbg()
     nodes = await bootstrapNetwork(nodecount=1)
     targetId = NodeId.example(rng)
     (node0, privKey0) = nodes[0]
@@ -134,7 +135,7 @@ suite "Providers Tests: two nodes":
     peerRec0: PeerRecord
 
   setupAll:
-    rng = newRng()
+    rng = newDrbg()
     nodes = await bootstrapNetwork(nodecount=3)
     targetId = NodeId.example(rng)
     (node0, privKey0) = nodes[0]
@@ -183,7 +184,7 @@ suite "Providers Tests: 20 nodes":
     peerRec0: PeerRecord
 
   setupAll:
-    rng = newRng()
+    rng = newDrbg()
     nodes = await bootstrapNetwork(nodecount=20)
     targetId = NodeId.example(rng)
     (node0, privKey0) = nodes[0]

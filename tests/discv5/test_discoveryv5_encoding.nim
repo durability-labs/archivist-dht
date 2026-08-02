@@ -8,6 +8,7 @@ import
   libp2p/crypto/secp,
   archivistdht/discv5/[messages, messages_encoding, encoding, spr, node, sessions],
   archivistdht/discv5/crypto,
+  archivistdht/private/eth/p2p/discoveryv5/random2,
   stew/byteutils,
   stint,
   ../dht/test_helper
@@ -440,7 +441,7 @@ suite "Discovery v5.1 Packet Encodings Test Vectors":
         hexToSeqByte(encodedPacket & "00")).isErr()
 
 suite "Discovery v5.1 Additional Encode/Decode":
-  var rng = newRng()
+  var rng = newDrbg()
 
   test "Encryption/Decryption":
     let
