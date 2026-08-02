@@ -13,7 +13,7 @@ import
   chronicles,
   metrics,
   libp2p/crypto/crypto,
-  "."/[node, encoding, sessions]
+  "."/[node, encoding, sessions, random2]
 
 const
   handshakeTimeout* = 500.milliseconds ## timeout for the reply on the
@@ -301,7 +301,7 @@ proc newTransport*[T](
   localNode: Node,
   bindPort: Port,
   bindIp = IPv4_any(),
-  rng = newRng()): Transport[T]=
+  rng = newDrbg()): Transport[T]=
 
   # TODO Consider whether this should be a Defect
   doAssert rng != nil, "RNG initialization failed"

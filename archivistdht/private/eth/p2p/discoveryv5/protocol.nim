@@ -1127,7 +1127,7 @@ proc newProtocol*(
     bindIp = IPv4_any(),
     enrAutoUpdate = false,
     config = defaultDiscoveryConfig,
-    rng = newRng(),
+    rng = newDrbg(),
     providers: ProvidersManager = nil,
     tp: Taskpool = nil,
 ): Protocol =
@@ -1202,7 +1202,7 @@ proc newProtocol*(
     bootstrapRecords: openArray[SignedPeerRecord] = [],
     bindIp = IPv4_any(),
     config = defaultDiscoveryConfig,
-    rng = newRng(),
+    rng = newDrbg(),
     providers: ProvidersManager = nil,
     tp: Taskpool = nil,
 ): Protocol =

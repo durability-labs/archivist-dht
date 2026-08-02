@@ -213,10 +213,7 @@ template fromURI*(r: var SignedPeerRecord, url: SprUri): bool =
   fromURI(r, string(url))
 
 proc toBase64*(r: SignedPeerRecord): string =
-  let encoded = r.encode
-  if encoded.isErr:
-    error "Failed to encode SignedPeerRecord", error = encoded.error
-  result = Base64Url.encode(encoded.get(@[]))
+  result = Base64Url.encode(r.encode)
 
 proc toURI*(r: SignedPeerRecord): string = "spr:" & r.toBase64
 

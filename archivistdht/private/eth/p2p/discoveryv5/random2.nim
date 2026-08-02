@@ -1,8 +1,14 @@
 import bearssl/rand
+import libp2p/crypto/rng as libp2p_rng
 
 ## Random helpers: similar as in stdlib, but with HmacDrbgContext rng
 # TODO: Move these somewhere else?
 const randMax = 18_446_744_073_709_551_615'u64
+
+proc newDrbg*(): ref HmacDrbgContext =
+  ## libp2p 2.x newRng returns a wrapped Rng; unwrap to the Drbg the DHT uses.
+  let rng = libp2p_rng.newRng()
+  if rng.isNil: nil else: rng.bearSslDrbgRef
 
 proc rand*(rng: var HmacDrbgContext, max: Natural): int =
   if max == 0: return 0

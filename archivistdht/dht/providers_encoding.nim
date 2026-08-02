@@ -4,6 +4,21 @@ import
   libp2p/protobuf/minprotobuf,
   ./providers_messages
 
+func getField*[T](
+    pb: ProtoBuffer, field: int, value: var SignedPayload[T]
+): ProtoResult[bool] {.inline.} =
+  ## Read a ``SignedPayload`` from ProtoBuf's message and validate it
+  var buffer: seq[byte]
+  let res = ?pb.getField(field, buffer)
+  if not res:
+    ok(false)
+  else:
+    let decoded = SignedPayload[T].decode(buffer)
+    if decoded.isErr:
+      return err(ProtoError.IncorrectBlob)
+    value = decoded.get
+    ok(true)
+
 func getField*(pb: ProtoBuffer, field: int,
                nid: var NodeId): ProtoResult[bool] {.inline.} =
   ## Read ``NodeId`` from ProtoBuf's message and validate it
@@ -40,7 +55,7 @@ func write*[T: SignedPeerRecord | PeerRecord | Envelope](
     env: T) {.raises: [Defect, ResultError[CryptoError]].} =
 
   ## Write Envelope value ``env`` to object ``pb`` using ProtoBuf's encoding.
-  let encoded = env.encode().tryGet()
+  let encoded = env.encode()
   write(pb, field, encoded)
 
 proc getRepeatedField*(pb: ProtoBuffer, field: int,

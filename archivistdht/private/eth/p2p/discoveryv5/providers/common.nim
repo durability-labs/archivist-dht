@@ -44,8 +44,7 @@ proc decode*(_: type ArchUnixTime, bytes: seq[byte]): ?!ArchUnixTime =
 
 # SignedPeerRecord encode/decode for typed datastore
 proc encode*(spr: SignedPeerRecord): seq[byte] =
-  spr.envelope.encode().valueOr:
-    raiseAssert "SignedPeerRecord encoding should not fail: " & $error
+  spr.envelope.encode()
 
 proc decode*(_: type SignedPeerRecord, bytes: seq[byte]): ?!SignedPeerRecord =
   # Use module-qualified call to avoid recursion with our own decode
