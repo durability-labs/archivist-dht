@@ -15,6 +15,7 @@ requires "stew >= 0.2.0"
 requires "stint >= 0.8.1"
 requires "https://github.com/durability-labs/nim-kvstore#feat/atomic-async"
 requires "taskpools >= 0.1.0"
+requires "testutils >= 0.3.0 & < 0.7.0"
 requires "questionable >= 0.10.15"
 requires "serialization >= 0.4.9 & < 0.5.0"
 

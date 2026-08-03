@@ -109,16 +109,15 @@
       }
     },
     "testutils": {
-      "version": "0.8.2",
-      "vcsRevision": "74588b8b55d116ca057431ae3a0ca359e0825fcd",
+      "version": "0.6.0",
+      "vcsRevision": "94d68e796c045d5b37cabc6be32d7bfa168f8857",
       "url": "https://github.com/status-im/nim-testutils",
       "downloadMethod": "git",
       "dependencies": [
-        "stew",
         "unittest2"
       ],
       "checksums": {
-        "sha1": "c4a67c4ca30e1b0c7198b2912409e064e011d400"
+        "sha1": "442014b44c86343dbe9735949ee0e1106437c255"
       }
     },
     "chronicles": {
@@ -378,7 +377,7 @@
     "libp2p": {
       "version": "2.2.0",
       "vcsRevision": "0e763288c10b6488e5971608f12aa49ab129720e",
-      "url": "https://github.com/status-im/nim-libp2p",
+      "url": "https://github.com/vacp2p/nim-libp2p",
       "downloadMethod": "git",
       "dependencies": [
         "libbacktrace",
